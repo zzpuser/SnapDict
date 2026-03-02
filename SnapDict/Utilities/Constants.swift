@@ -53,6 +53,8 @@ enum Constants {
         static let byteDanceTTSAPIKey = "byteDanceTTSAPIKey"
         static let ttsFallbackToSystem = "ttsFallbackToSystem"
         static let byteDanceTTSVoice = "byteDanceTTSVoice"
+        static let hideOnFocusLost = "hideOnFocusLost"
+        static let autoCorrect = "autoCorrect"
     }
 
     enum Defaults {
@@ -62,6 +64,8 @@ enum Constants {
         static let enableMnemonic = true
         static let showExamples = true
         static let ttsFallbackToSystem = true
+        static let hideOnFocusLost = true
+        static let autoCorrect = false
     }
 
     enum Notification {

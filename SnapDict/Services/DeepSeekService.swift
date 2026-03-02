@@ -11,8 +11,9 @@ final class DeepSeekService: Sendable {
     /// 只请求单词释义（不含助记和例句）
     func translateWord(_ text: String, skipCache: Bool = false) async throws -> TranslationResult {
         let normalizedText = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let autoCorrect = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.autoCorrect) as? Bool
+            ?? Constants.Defaults.autoCorrect
 
-        // 缓存检查：只要有 word/phonetic/translation 就算命中
         if !skipCache, let cached = CacheService.shared.getCachedTranslation(for: normalizedText) {
             if !cached.word.isEmpty && !cached.phonetic.isEmpty && !cached.translation.isEmpty {
                 return TranslationResult(
@@ -20,23 +21,36 @@ final class DeepSeekService: Sendable {
                     phonetic: cached.phonetic,
                     translation: cached.translation,
                     examples: [],
-                    correctedFrom: cached.correctedFrom,
-                    etymology: nil,
-                    association: nil
+                    originalInput: cached.originalInput,
+                    suggestedCorrection: cached.suggestedCorrection
                 )
             }
         }
 
-        let prompt = """
-        你是一个专业的英语词典。请翻译以下英文单词或短语，只返回 JSON 格式：
-        {"word": "原词", "phonetic": "音标", "translation": "中文释义（简洁，包含词性）", "corrected_from": null}
+        let prompt: String
+        if autoCorrect {
+            prompt = """
+            你是一个专业的英语词典。请翻译以下英文单词或短语，只返回 JSON 格式：
+            {"word": "原词", "phonetic": "音标", "translation": "中文释义（简洁，包含词性）", "original_input": null}
 
-        如果输入的英文单词或短语拼写有误，请自动纠正为正确拼写。word 填写纠正后的正确单词，corrected_from 填写用户的原始输入。如果拼写正确，corrected_from 为 null。
-        如果输入的是中文，则翻译为英文，word 为英文翻译结果，corrected_from 为 null。
-        只返回 JSON，不要返回其他内容。
+            如果输入的英文单词或短语拼写有误，请自动纠正为正确拼写。word 填写纠正后的正确单词，original_input 填写用户的原始输入。如果拼写正确，original_input 为 null。
+            如果输入的是中文，则翻译为英文，word 为英文翻译结果，original_input 为 null。
+            只返回 JSON，不要返回其他内容。
 
-        输入：\(text)
-        """
+            输入：\(text)
+            """
+        } else {
+            prompt = """
+            你是一个专业的英语词典。请翻译以下英文单词或短语，只返回 JSON 格式：
+            {"word": "原词", "phonetic": "音标", "translation": "中文释义（简洁，包含词性）", "suggested_correction": null}
+
+            不要自动纠正拼写。word 字段始终填写用户的原始输入。如果你发现拼写可能有误，suggested_correction 字段填写你建议的正确拼写；如果拼写正确，suggested_correction 为 null。按用户原始输入进行翻译。
+            如果输入的是中文，则翻译为英文，word 为英文翻译结果，suggested_correction 为 null。
+            只返回 JSON，不要返回其他内容。
+
+            输入：\(text)
+            """
+        }
 
         let cleaned = try await callAPI(prompt: prompt)
 
@@ -48,10 +62,12 @@ final class DeepSeekService: Sendable {
             let word: String
             let phonetic: String
             let translation: String
-            let correctedFrom: String?
+            let originalInput: String?
+            let suggestedCorrection: String?
             enum CodingKeys: String, CodingKey {
                 case word, phonetic, translation
-                case correctedFrom = "corrected_from"
+                case originalInput = "original_input"
+                case suggestedCorrection = "suggested_correction"
             }
         }
 
@@ -61,9 +77,8 @@ final class DeepSeekService: Sendable {
             phonetic: wordResult.phonetic,
             translation: wordResult.translation,
             examples: [],
-            correctedFrom: wordResult.correctedFrom,
-            etymology: nil,
-            association: nil
+            originalInput: wordResult.originalInput,
+            suggestedCorrection: wordResult.suggestedCorrection
         )
 
         CacheService.shared.cacheTranslation(translationResult)
