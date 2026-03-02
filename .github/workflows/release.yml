@@ -1,0 +1,88 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (例如 1.0.0)'
+        required: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            VERSION=${GITHUB_REF_NAME#v}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -scheme SnapDict -project SnapDict.xcodeproj
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -scheme SnapDict \
+            -project SnapDict.xcodeproj \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Create DMG
+        run: |
+          APP_PATH="build/Build/Products/Release/SnapDict.app"
+          DMG_NAME="SnapDict-${{ steps.version.outputs.version }}.dmg"
+
+          # 创建临时目录用于 DMG 内容
+          mkdir -p dmg_content
+          cp -R "$APP_PATH" dmg_content/
+          ln -s /Applications dmg_content/Applications
+
+          # 创建 DMG
+          hdiutil create -volname "SnapDict" \
+            -srcfolder dmg_content \
+            -ov -format UDZO \
+            "$DMG_NAME"
+
+          echo "dmg_name=$DMG_NAME" >> $GITHUB_ENV
+
+      - name: Create tag (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: SnapDict ${{ steps.version.outputs.version }}
+          body: |
+            ## SnapDict ${{ steps.version.outputs.version }}
+
+            ### 安装方式
+            1. 下载 DMG 文件
+            2. 打开 DMG，将 SnapDict 拖入 Applications 文件夹
+            3. 首次打开时，右键点击 app → 打开（因为没有 Apple 开发者签名）
+          files: ${{ env.dmg_name }}
+          draft: false
+          prerelease: false
