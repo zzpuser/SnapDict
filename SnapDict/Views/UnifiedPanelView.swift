@@ -1,0 +1,167 @@
+import SwiftUI
+import SwiftData
+
+// MARK: - PanelTab
+
+enum PanelTab: Int, CaseIterable {
+    case translation = 1
+    case wordBook = 2
+    case settings = 3
+
+    var label: String {
+        switch self {
+        case .translation: "查词"
+        case .wordBook: "单词本"
+        case .settings: "设置"
+        }
+    }
+
+    var shortcut: String {
+        switch self {
+        case .translation: "⌘1"
+        case .wordBook: "⌘2"
+        case .settings: "⌘3"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .translation: "magnifyingglass"
+        case .wordBook: "books.vertical"
+        case .settings: "gearshape"
+        }
+    }
+}
+
+// MARK: - UnifiedPanelView
+
+struct UnifiedPanelView: View {
+    @State private var selectedTab: PanelTab = .translation
+    @State private var translationResetID = UUID()
+    @State private var translationHasContent = false
+
+    /// 切换 Tab：先预扩窗口（避免内容被压缩闪动），再切换内容
+    private func switchTab(to tab: PanelTab) {
+        PanelManager.shared.preExpandIfNeeded(for: tab, hasContent: translationHasContent)
+        selectedTab = tab
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Tab 指示器栏
+            TabIndicatorBar(selectedTab: $selectedTab, onSelect: switchTab)
+
+            Divider()
+
+            // Tab 内容区，填满 NSPanel 剩余高度
+            // 非激活 Tab 设置 height: 0，不参与 ZStack 布局计算
+            ZStack(alignment: .top) {
+                TranslationContentView(
+                    resetID: translationResetID,
+                    isActive: selectedTab == .translation,
+                    onContentChange: { hasContent in
+                        translationHasContent = hasContent
+                        guard selectedTab == .translation else { return }
+                        if hasContent {
+                            PanelManager.shared.setExpandedMode()
+                        } else {
+                            PanelManager.shared.setCompactMode()
+                        }
+                    }
+                )
+                .tabContent(isActive: selectedTab == .translation)
+
+                PanelWordBookView()
+                    .tabContent(isActive: selectedTab == .wordBook)
+
+                PanelSettingsView(isActive: selectedTab == .settings) { height in
+                    guard selectedTab == .settings else { return }
+                    PanelManager.shared.updateSettingsHeight(height)
+                }
+                .tabContent(isActive: selectedTab == .settings)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.clear)
+        // Escape 关闭面板
+        // 查词 Tab 时，TranslationContentView 会先处理（清空内容），
+        // 搜索框已空时返回 .ignored，事件冒泡到这里再关闭面板
+        .onKeyPress(.escape) {
+            PanelManager.shared.hidePanel()
+            return .handled
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            // 内容切换后，动画调整到目标高度（preExpand 已处理扩大，这里处理缩小）
+            PanelManager.shared.adjustHeight(for: newTab, hasContent: self.translationHasContent)
+        }
+        .onAppear {
+            // 注册显示/重置回调
+            PanelManager.shared.onShow = { shouldReset in
+                if shouldReset {
+                    selectedTab = .translation
+                    translationResetID = UUID()
+                    translationHasContent = false
+                }
+                // 聚焦由 TranslationContentView 内部处理
+            }
+            // 注册 Tab 切换回调（供 MenuBarView 等外部调用）
+            PanelManager.shared.onSwitchTab = { tab in
+                switchTab(to: tab)
+            }
+        }
+    }
+}
+
+// MARK: - TabIndicatorBar
+
+private struct TabIndicatorBar: View {
+    @Binding var selectedTab: PanelTab
+    var onSelect: (PanelTab) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(PanelTab.allCases, id: \.self) { tab in
+                Button {
+                    onSelect(tab)
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 13))
+                        Text(tab.label)
+                            .font(.system(size: 13, weight: .medium))
+                        Text(tab.shortcut)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.quaternary)
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 6)
+                    .background(
+                        selectedTab == tab
+                            ? AnyShapeStyle(.fill.tertiary)
+                            : AnyShapeStyle(Color.clear),
+                        in: Capsule()
+                    )
+                    .contentShape(Capsule())
+                    .foregroundStyle(selectedTab == tab ? .primary : .secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+    }
+}
+
+// MARK: - Tab Content Modifier
+
+private extension View {
+    func tabContent(isActive: Bool) -> some View {
+        self
+            .frame(height: isActive ? nil : 0)
+            .opacity(isActive ? 1 : 0)
+            .allowsHitTesting(isActive)
+    }
+}

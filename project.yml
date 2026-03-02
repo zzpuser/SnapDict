@@ -1,0 +1,37 @@
+name: SnapDict
+options:
+  bundleIdPrefix: com.zzp
+  deploymentTarget:
+    macOS: "15.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+packages:
+  HotKey:
+    url: https://github.com/soffes/HotKey
+    from: 0.2.1
+
+targets:
+  SnapDict:
+    type: application
+    platform: macOS
+    sources:
+      - SnapDict
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zzp.SnapDict
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        INFOPLIST_FILE: SnapDict/Info.plist
+        CODE_SIGN_ENTITLEMENTS: SnapDict/SnapDict.entitlements
+        CODE_SIGN_STYLE: Automatic
+        PRODUCT_NAME: SnapDict
+        COMBINE_HIDPI_IMAGES: YES
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_STRICT_CONCURRENCY: complete
+    dependencies:
+      - package: HotKey
+    entitlements:
+      path: SnapDict/SnapDict.entitlements
