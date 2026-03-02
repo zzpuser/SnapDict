@@ -18,7 +18,12 @@ struct TranslationContentView: View {
     @State private var debounceTask: Task<Void, Never>?
     @State private var translationTask: Task<Void, Never>?
     @State private var isSpeaking = false
-    @State private var isRefreshing = false
+    @State private var isMnemonicLoading = false
+    @State private var isExamplesLoading = false
+    @State private var mnemonicError: String?
+    @State private var examplesError: String?
+    @State private var mnemonicTask: Task<Void, Never>?
+    @State private var examplesTask: Task<Void, Never>?
 
     private let synthesizer = AVSpeechSynthesizer()
 
@@ -214,18 +219,68 @@ struct TranslationContentView: View {
         errorMessage = nil
         result = nil
         isSaved = false
+        isMnemonicLoading = false
+        isExamplesLoading = false
+        mnemonicError = nil
+        examplesError = nil
+        mnemonicTask?.cancel()
+        examplesTask?.cancel()
 
         translationTask = Task {
+            // 阶段 1：查词
             do {
-                let translationResult = try await DeepSeekService.shared.translate(text)
+                let translationResult = try await DeepSeekService.shared.translateWord(text)
                 guard !Task.isCancelled else { return }
                 self.result = translationResult
+                self.isLoading = false
                 self.isSaved = WordBookManager.shared.isWordSaved(translationResult.word)
+
+                // 阶段 2：并行获取助记和例句
+                let correctedWord = translationResult.word
+                let translation = translationResult.translation
+
+                let enableMnemonic = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.enableMnemonic) as? Bool
+                    ?? Constants.Defaults.enableMnemonic
+                let showExamples = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.showExamples) as? Bool
+                    ?? Constants.Defaults.showExamples
+
+                if enableMnemonic {
+                    mnemonicTask = Task {
+                        isMnemonicLoading = true
+                        mnemonicError = nil
+                        do {
+                            let mnemonic = try await DeepSeekService.shared.fetchMnemonic(correctedWord)
+                            guard !Task.isCancelled else { return }
+                            self.result?.etymology = mnemonic.etymology
+                            self.result?.association = mnemonic.association
+                        } catch {
+                            guard !Task.isCancelled else { return }
+                            self.mnemonicError = error.localizedDescription
+                        }
+                        self.isMnemonicLoading = false
+                    }
+                }
+
+                if showExamples {
+                    examplesTask = Task {
+                        isExamplesLoading = true
+                        examplesError = nil
+                        do {
+                            let examples = try await DeepSeekService.shared.fetchExamples(correctedWord, translation: translation)
+                            guard !Task.isCancelled else { return }
+                            self.result?.examples = examples
+                        } catch {
+                            guard !Task.isCancelled else { return }
+                            self.examplesError = error.localizedDescription
+                        }
+                        self.isExamplesLoading = false
+                    }
+                }
             } catch {
                 guard !Task.isCancelled else { return }
                 self.errorMessage = error.localizedDescription
+                self.isLoading = false
             }
-            self.isLoading = false
         }
     }
 
@@ -233,11 +288,17 @@ struct TranslationContentView: View {
         // 取消防抖任务
         debounceTask?.cancel()
         // 若有正在进行的查询，立即中断并清除结果，等待用户输入完成后重新查询
-        if isLoading {
+        if isLoading || isMnemonicLoading || isExamplesLoading {
             translationTask?.cancel()
+            mnemonicTask?.cancel()
+            examplesTask?.cancel()
             isLoading = false
+            isMnemonicLoading = false
+            isExamplesLoading = false
             result = nil
             errorMessage = nil
+            mnemonicError = nil
+            examplesError = nil
         }
         debounceTask = Task {
             try? await Task.sleep(for: .milliseconds(300))
@@ -251,10 +312,16 @@ struct TranslationContentView: View {
     private func resetState() {
         debounceTask?.cancel()
         translationTask?.cancel()
+        mnemonicTask?.cancel()
+        examplesTask?.cancel()
         isLoading = false
+        isMnemonicLoading = false
+        isExamplesLoading = false
         query = ""
         result = nil
         errorMessage = nil
+        mnemonicError = nil
+        examplesError = nil
         isSaved = false
     }
 
@@ -318,20 +385,27 @@ struct TranslationContentView: View {
                         .font(.system(size: 12))
                     Text("助记")
                         .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondary)
 
-                    if isRefreshing {
+                    if isMnemonicLoading {
                         ProgressView()
                             .controlSize(.mini)
                     } else if hasMnemonicData {
-                        Button { refreshTranslation() } label: {
+                        Button { refreshMnemonic() } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                    } else if mnemonicError != nil {
+                        Button { refreshMnemonic() } label: {
+                            Text("重试")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
                     } else {
-                        Button { refreshTranslation() } label: {
+                        Button { refreshMnemonic() } label: {
                             Text("生成")
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
@@ -340,29 +414,38 @@ struct TranslationContentView: View {
                     }
                 }
 
-                if let etymology = result.etymology {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("词根")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.tertiary)
-                        Text(etymology)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.primary)
-                            .textSelection(.enabled)
-                    }
+                if let error = mnemonicError, !hasMnemonicData {
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.red)
                 }
 
-                if let association = result.association {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("联想")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.tertiary)
-                        Text(association)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.primary)
-                            .textSelection(.enabled)
+                Group {
+                    if let etymology = result.etymology {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("词根")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.tertiary)
+                            Text(etymology)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.primary)
+                                .textSelection(.enabled)
+                        }
+                    }
+
+                    if let association = result.association {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("联想")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.tertiary)
+                            Text(association)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.primary)
+                                .textSelection(.enabled)
+                        }
                     }
                 }
+                .animation(.easeInOut(duration: 0.3), value: hasMnemonicData)
             }
         }
     }
@@ -383,18 +466,25 @@ struct TranslationContentView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
 
-                    if isRefreshing {
+                    if isExamplesLoading {
                         ProgressView()
                             .controlSize(.mini)
                     } else if hasExamples {
-                        Button { refreshTranslation() } label: {
+                        Button { refreshExamples() } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                    } else if examplesError != nil {
+                        Button { refreshExamples() } label: {
+                            Text("重试")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
                     } else {
-                        Button { refreshTranslation() } label: {
+                        Button { refreshExamples() } label: {
                             Text("生成")
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
@@ -403,30 +493,61 @@ struct TranslationContentView: View {
                     }
                 }
 
-                ForEach(result.examples, id: \.self) { example in
-                    Text(example)
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                if let error = examplesError, !hasExamples {
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.red)
                 }
+
+                Group {
+                    ForEach(result.examples, id: \.self) { example in
+                        Text(example)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.3), value: hasExamples)
             }
         }
     }
 
-    private func refreshTranslation() {
-        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isRefreshing else { return }
+    private func refreshMnemonic() {
+        guard let result = result, !isMnemonicLoading else { return }
 
-        isRefreshing = true
-
-        Task {
+        mnemonicTask?.cancel()
+        mnemonicTask = Task {
+            isMnemonicLoading = true
+            mnemonicError = nil
             do {
-                let translationResult = try await DeepSeekService.shared.translate(text, skipCache: true)
-                self.result = translationResult
+                let mnemonic = try await DeepSeekService.shared.fetchMnemonic(result.word, skipCache: true)
+                guard !Task.isCancelled else { return }
+                self.result?.etymology = mnemonic.etymology
+                self.result?.association = mnemonic.association
             } catch {
-                // 刷新失败时保留当前结果
+                guard !Task.isCancelled else { return }
+                self.mnemonicError = error.localizedDescription
             }
-            self.isRefreshing = false
+            self.isMnemonicLoading = false
+        }
+    }
+
+    private func refreshExamples() {
+        guard let result = result, !isExamplesLoading else { return }
+
+        examplesTask?.cancel()
+        examplesTask = Task {
+            isExamplesLoading = true
+            examplesError = nil
+            do {
+                let examples = try await DeepSeekService.shared.fetchExamples(result.word, translation: result.translation, skipCache: true)
+                guard !Task.isCancelled else { return }
+                self.result?.examples = examples
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.examplesError = error.localizedDescription
+            }
+            self.isExamplesLoading = false
         }
     }
 
