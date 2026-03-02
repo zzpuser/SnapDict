@@ -39,6 +39,7 @@ struct UnifiedPanelView: View {
     @State private var selectedTab: PanelTab = .translation
     @State private var translationResetID = UUID()
     @State private var translationHasContent = false
+    @State private var hideOnFocusLost: Bool = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.hideOnFocusLost) as? Bool ?? Constants.Defaults.hideOnFocusLost
 
     /// 切换 Tab：先预扩窗口（避免内容被压缩闪动），再切换内容
     private func switchTab(to tab: PanelTab) {
@@ -49,7 +50,7 @@ struct UnifiedPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Tab 指示器栏
-            TabIndicatorBar(selectedTab: $selectedTab, onSelect: switchTab)
+            TabIndicatorBar(selectedTab: $selectedTab, onSelect: switchTab, showCloseButton: !hideOnFocusLost)
 
             Divider()
 
@@ -95,6 +96,12 @@ struct UnifiedPanelView: View {
             // 内容切换后，动画调整到目标高度（preExpand 已处理扩大，这里处理缩小）
             PanelManager.shared.adjustHeight(for: newTab, hasContent: self.translationHasContent)
         }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let newValue = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.hideOnFocusLost) as? Bool ?? Constants.Defaults.hideOnFocusLost
+            if hideOnFocusLost != newValue {
+                hideOnFocusLost = newValue
+            }
+        }
         .onAppear {
             // 注册显示/重置回调
             PanelManager.shared.onShow = { shouldReset in
@@ -103,7 +110,6 @@ struct UnifiedPanelView: View {
                     translationResetID = UUID()
                     translationHasContent = false
                 }
-                // 聚焦由 TranslationContentView 内部处理
             }
             // 注册 Tab 切换回调（供 MenuBarView 等外部调用）
             PanelManager.shared.onSwitchTab = { tab in
@@ -118,6 +124,7 @@ struct UnifiedPanelView: View {
 private struct TabIndicatorBar: View {
     @Binding var selectedTab: PanelTab
     var onSelect: (PanelTab) -> Void
+    var showCloseButton: Bool
 
     var body: some View {
         HStack(spacing: 2) {
@@ -149,6 +156,25 @@ private struct TabIndicatorBar: View {
             }
 
             Spacer()
+
+            if showCloseButton {
+                Button {
+                    PanelManager.shared.hidePanel()
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("esc")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.fill.quaternary, in: Capsule())
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 7)

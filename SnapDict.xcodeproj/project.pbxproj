@@ -32,7 +32,6 @@
 		EACBF911AA84FFED473CC57C /* UnifiedPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE4C8BFFB9EBAC2B8E464950 /* UnifiedPanelView.swift */; };
 		F35B183519A71828050864B4 /* SnapDictApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9870533FB579328650A06CDE /* SnapDictApp.swift */; };
 		F802B82FCF417540E1916128 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBA68348BAFC15AE9B053A65 /* AppDelegate.swift */; };
-		FC1F7398C8C4FFE76BD8D4D8 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F8D0D4C5CECD4AE9398FC5B /* MenuBarView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,7 +44,6 @@
 		3719D7A7C373EB674DFF38FD /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
 		39AE3856D11F007BDE4D15CF /* TranslationCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationCache.swift; sourceTree = "<group>"; };
 		45EAFE4E242D1616D8BC6702 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		4F8D0D4C5CECD4AE9398FC5B /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		6135220CCDC4F0D0642313DB /* TranslationPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationPanel.swift; sourceTree = "<group>"; };
 		62566692D40C75E394760BEE /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		6343E5CFC6B1BB29C20DDDD8 /* DotScreenService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DotScreenService.swift; sourceTree = "<group>"; };
@@ -165,7 +163,6 @@
 		C7F99371FC1CF891F418C6DD /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				4F8D0D4C5CECD4AE9398FC5B /* MenuBarView.swift */,
 				D3C30C12394580B770E39D40 /* PanelSettingsView.swift */,
 				12D98B05DEDA6F0AE8E3AC8D /* PanelWordBookView.swift */,
 				C22144C1889C4B76FFA59617 /* TranslationContentView.swift */,
@@ -260,7 +257,6 @@
 				253300B697AFE32F8D4A9828 /* DeepSeekService.swift in Sources */,
 				DDF1D15832A4DE437198310E /* DotScreenService.swift in Sources */,
 				D7AC6B61C89FAF6EB4F14530 /* HotKeyManager.swift in Sources */,
-				FC1F7398C8C4FFE76BD8D4D8 /* MenuBarView.swift in Sources */,
 				734097A4ABB033C89E07345B /* PanelManager.swift in Sources */,
 				492DD177029532AD5034A835 /* PanelSettingsView.swift in Sources */,
 				6AE1D487D3FF7F611AB4CD65 /* PanelWordBookView.swift in Sources */,

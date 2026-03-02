@@ -75,6 +75,12 @@ final class PanelManager: NSObject, NSWindowDelegate {
         self.modelContainer = modelContainer
 
         if let panel, panel.isVisible {
+            let hideOnFocus = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.hideOnFocusLost) as? Bool
+                ?? Constants.Defaults.hideOnFocusLost
+            if !hideOnFocus && !panel.isKeyWindow {
+                panel.makeKeyAndOrderFront(nil)
+                return
+            }
             panel.orderOut(nil)
             return
         }
@@ -372,7 +378,11 @@ final class PanelManager: NSObject, NSWindowDelegate {
 
     nonisolated func windowDidResignKey(_ notification: Notification) {
         Task { @MainActor in
-            self.hidePanel()
+            let hide = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.hideOnFocusLost) as? Bool
+                ?? Constants.Defaults.hideOnFocusLost
+            if hide {
+                self.hidePanel()
+            }
         }
     }
 }
