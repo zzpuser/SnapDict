@@ -56,6 +56,7 @@ struct PanelSettingsView: View {
     @State private var enableMnemonic: Bool = Constants.Defaults.enableMnemonic
     @State private var showExamples: Bool = Constants.Defaults.showExamples
     @State private var hideOnFocusLost: Bool = Constants.Defaults.hideOnFocusLost
+    @State private var autoCorrect: Bool = Constants.Defaults.autoCorrect
     @State private var eventMonitor: Any?
 
     // API test states
@@ -129,6 +130,21 @@ struct PanelSettingsView: View {
                         },
                         onTest: { testDeepSeek() }
                     )
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+
+                    Divider().padding(.leading, 14)
+
+                    HStack {
+                        Text("自动纠正拼写")
+                        Spacer()
+                        Toggle("", isOn: $autoCorrect)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                            .onChange(of: autoCorrect) { _, newValue in
+                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.autoCorrect)
+                            }
+                    }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
 
@@ -990,6 +1006,8 @@ struct PanelSettingsView: View {
             ?? Constants.Defaults.showExamples
         hideOnFocusLost = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.hideOnFocusLost) as? Bool
             ?? Constants.Defaults.hideOnFocusLost
+        autoCorrect = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.autoCorrect) as? Bool
+            ?? Constants.Defaults.autoCorrect
         selectedTaskKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.cachedTaskKey) ?? ""
         selectedDeviceId = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.cachedDeviceId) ?? ""
         // 有 Key 时自动连接获取设备
