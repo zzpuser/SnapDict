@@ -35,6 +35,7 @@ struct PanelSettingsView: View {
     // Push settings
     @State private var pushInterval: Int = Constants.Defaults.pushIntervalMinutes
     @State private var pushOnlyLearning: Bool = Constants.Defaults.pushOnlyLearning
+    @State private var pushMode: Constants.PushMode = Constants.Defaults.pushMode
     @State private var availableTasks: [DotTask] = []
     @State private var selectedTaskKey: String = ""
     @State private var isLoadingTasks: Bool = false
@@ -368,14 +369,14 @@ struct PanelSettingsView: View {
                                 .font(.system(size: 14))
                             if isLoadingTasks {
                                 ProgressView().controlSize(.small)
-                            } else if availableTasks.filter(\.isTextAPI).isEmpty {
+                            } else if availableTasks.filter(pushMode == .image ? \.isImageAPI : \.isTextAPI).isEmpty {
                                 Text(selectedTaskKey.isEmpty ? "默认" : selectedTaskKey)
                                     .font(.system(size: 12, design: .monospaced))
                                     .foregroundStyle(.secondary)
                             } else {
                                 Picker("", selection: $selectedTaskKey) {
                                     Text("默认").tag("")
-                                    ForEach(availableTasks.filter(\.isTextAPI)) { task in
+                                    ForEach(availableTasks.filter(pushMode == .image ? \.isImageAPI : \.isTextAPI)) { task in
                                         Text(task.key ?? "unknown").tag(task.key ?? "")
                                     }
                                 }
@@ -394,7 +395,7 @@ struct PanelSettingsView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
 
-                        Text("设备有多个文本 API 内容时，用于指定推送目标")
+                        Text("设备有多个\(pushMode == .image ? "图像" : "文本") API 内容时，用于指定推送目标")
                             .font(.system(size: 11))
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -433,6 +434,30 @@ struct PanelSettingsView: View {
                                 UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.pushOnlyLearning)
                             }
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+
+                    Divider().padding(.leading, 14)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("推送模式")
+                            .font(.system(size: 14))
+                        Picker("模式", selection: $pushMode) {
+                            ForEach(Constants.PushMode.allCases, id: \.self) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                        .onChange(of: pushMode) { _, newValue in
+                            UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.pushMode)
+                            loadTasks()
+                        }
+                        Text(pushMode == .image ? "将单词渲染为图片推送，排版更美观" : "推送纯文本内容到设备")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                 }
@@ -485,7 +510,9 @@ struct PanelSettingsView: View {
                 Color.clear.preference(key: ContentHeightKey.self, value: geo.size.height)
             })
             .onPreferenceChange(ContentHeightKey.self) { height in
-                onHeightChange?(height)
+                MainActor.assumeIsolated {
+                    onHeightChange?(height)
+                }
             }
         }
         .onAppear { loadSettings() }
@@ -1008,6 +1035,8 @@ struct PanelSettingsView: View {
             ?? Constants.Defaults.hideOnFocusLost
         autoCorrect = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.autoCorrect) as? Bool
             ?? Constants.Defaults.autoCorrect
+        let pushModeRaw = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.pushMode) ?? ""
+        pushMode = Constants.PushMode(rawValue: pushModeRaw) ?? Constants.Defaults.pushMode
         selectedTaskKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.cachedTaskKey) ?? ""
         selectedDeviceId = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.cachedDeviceId) ?? ""
         // 有 Key 时自动连接获取设备
