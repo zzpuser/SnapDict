@@ -36,6 +36,7 @@ final class DeepSeekService: Sendable {
 
             如果输入的英文单词或短语拼写有误，请自动纠正为正确拼写。word 填写纠正后的正确单词，original_input 填写用户的原始输入。如果拼写正确，original_input 为 null。
             如果输入的是中文，则翻译为英文，word 为英文翻译结果，original_input 为 null。
+            phonetic 必须是字符串，如果无法提供音标则返回空字符串 ""。
             只返回 JSON，不要返回其他内容。
 
             输入：\(text)
@@ -47,6 +48,7 @@ final class DeepSeekService: Sendable {
 
             不要自动纠正拼写。word 字段始终填写用户的原始输入。如果你发现拼写可能有误，suggested_correction 字段填写你建议的正确拼写；如果拼写正确，suggested_correction 为 null。按用户原始输入进行翻译。
             如果输入的是中文，则翻译为英文，word 为英文翻译结果，suggested_correction 为 null。
+            phonetic 必须是字符串，如果无法提供音标则返回空字符串 ""。
             只返回 JSON，不要返回其他内容。
 
             输入：\(text)
@@ -61,7 +63,7 @@ final class DeepSeekService: Sendable {
 
         struct WordResult: Codable {
             let word: String
-            let phonetic: String
+            let phonetic: String?
             let translation: String
             let originalInput: String?
             let suggestedCorrection: String?
@@ -75,7 +77,7 @@ final class DeepSeekService: Sendable {
         let wordResult = try JSONDecoder().decode(WordResult.self, from: resultData)
         let translationResult = TranslationResult(
             word: wordResult.word,
-            phonetic: wordResult.phonetic,
+            phonetic: wordResult.phonetic ?? "",
             translation: wordResult.translation,
             examples: [],
             originalInput: wordResult.originalInput,
