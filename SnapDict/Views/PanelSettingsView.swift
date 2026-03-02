@@ -2,6 +2,29 @@ import SwiftUI
 import Carbon
 import HotKey
 
+private struct SecureKeyField: View {
+    let placeholder: String
+    @Binding var text: String
+    @State private var isSecured = true
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if isSecured {
+                SecureField(placeholder, text: $text)
+            } else {
+                TextField(placeholder, text: $text)
+            }
+            Button { isSecured.toggle() } label: {
+                Image(systemName: isSecured ? "eye.slash" : "eye")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+        }
+        .textFieldStyle(.roundedBorder)
+    }
+}
+
 private struct ContentHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -27,12 +50,14 @@ struct PanelSettingsView: View {
     @State private var savedByteDanceTTSAppId: String = ""
     @State private var savedByteDanceTTSKey: String = ""
 
+
     // TTS
     @State private var ttsEngine: Constants.TTSEngine = .system
     @State private var ttsFallbackToSystem: Bool = Constants.Defaults.ttsFallbackToSystem
     @State private var ttsVoice: String = Constants.API.byteDanceTTSDefaultVoice
 
     // Push settings
+    @State private var pushEnabled: Bool = false
     @State private var pushInterval: Int = Constants.Defaults.pushIntervalMinutes
     @State private var pushOnlyLearning: Bool = Constants.Defaults.pushOnlyLearning
     @State private var pushMode: Constants.PushMode = Constants.Defaults.pushMode
@@ -246,8 +271,7 @@ struct PanelSettingsView: View {
                                     .font(.system(size: 13))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 70, alignment: .leading)
-                                SecureField("Access Key", text: $byteDanceTTSKey)
-                                    .textFieldStyle(.roundedBorder)
+                                SecureKeyField(placeholder:"Access Key", text: $byteDanceTTSKey)
                             }
                             HStack(spacing: 6) {
                                 Text("从火山引擎控制台获取")
@@ -310,6 +334,27 @@ struct PanelSettingsView: View {
                 sectionHeader("推送")
 
                 VStack(spacing: 0) {
+                    HStack {
+                        Text("墨水屏推送")
+                        Spacer()
+                        Toggle("", isOn: $pushEnabled)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                            .onChange(of: pushEnabled) { _, newValue in
+                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.pushEnabled)
+                                if newValue {
+                                    WordPushScheduler.shared.start()
+                                } else {
+                                    WordPushScheduler.shared.stop()
+                                }
+                            }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+
+                    if pushEnabled {
+                    Divider().padding(.leading, 14)
+
                     // API Key 行
                     dotApiKeyRow()
                         .padding(.horizontal, 14)
@@ -460,6 +505,7 @@ struct PanelSettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
+                    } // end if pushEnabled
                 }
                 .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, 14)
@@ -530,8 +576,7 @@ struct PanelSettingsView: View {
             Text("墨水屏 (Dot. App)")
                 .font(.system(size: 14))
             HStack(spacing: 6) {
-                SecureField("API Key", text: $dotKey)
-                    .textFieldStyle(.roundedBorder)
+                SecureKeyField(placeholder:"API Key", text: $dotKey)
                 Button(dotSaveState == .saved ? "已保存" : "保存") {
                     saveDotKeyAndRefresh()
                 }
@@ -617,6 +662,7 @@ struct PanelSettingsView: View {
         }
     }
 
+
     @ViewBuilder
     private func apiKeyRow(
         title: String,
@@ -633,8 +679,7 @@ struct PanelSettingsView: View {
             Text(title)
                 .font(.system(size: 14))
             HStack(spacing: 6) {
-                SecureField(placeholder, text: key)
-                    .textFieldStyle(.roundedBorder)
+                SecureKeyField(placeholder:placeholder, text: key)
                 apiTestButton(state: testState, action: onTest)
                 Button(saveState.wrappedValue == .saved ? "已保存" : "保存") {
                     onSave()
@@ -1023,6 +1068,7 @@ struct PanelSettingsView: View {
             ?? Constants.Defaults.ttsFallbackToSystem
         ttsVoice = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSVoice)
             ?? Constants.API.byteDanceTTSDefaultVoice
+        pushEnabled = UserDefaults.standard.bool(forKey: Constants.UserDefaultsKey.pushEnabled)
         pushInterval = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.pushInterval) as? Int
             ?? Constants.Defaults.pushIntervalMinutes
         pushOnlyLearning = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.pushOnlyLearning) as? Bool
