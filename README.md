@@ -32,7 +32,7 @@
 
 1. 从 [Releases](https://github.com/zzpuser/SnapDict/releases/latest) 下载最新的 DMG 文件
 2. 打开 DMG，将 SnapDict 拖入 Applications 文件夹
-3. 双击 DMG 中的「修复权限」脚本，输入密码完成权限修复
+3. 终端执行 `sudo xattr -r -d com.apple.quarantine /Applications/SnapDict.app`
 4. 打开 SnapDict
 
 ## 快速开始
@@ -83,7 +83,6 @@ open SnapDict.xcodeproj
 **安装体验优化**
 
 - DMG 安装页面美化：自定义背景图、图标布局和拖拽箭头引导
-- DMG 内置「修复权限」脚本，双击即可解除 quarantine，无需手动终端操作
 
 **修复**
 

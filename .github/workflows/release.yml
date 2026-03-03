@@ -60,7 +60,6 @@ jobs:
 
           mkdir -p dmg_content
           cp -R "$APP_PATH" dmg_content/
-          cp scripts/fix-quarantine.command dmg_content/
 
           create-dmg \
             --volname "SnapDict" \
@@ -72,7 +71,6 @@ jobs:
             --icon "SnapDict.app" 180 170 \
             --hide-extension "SnapDict.app" \
             --app-drop-link 480 170 \
-            --icon "fix-quarantine.command" 330 320 \
             --no-internet-enable \
             "$DMG_NAME" \
             dmg_content/ \
@@ -115,7 +113,7 @@ jobs:
             ## 安装方式
             1. 下载 DMG 文件
             2. 打开 DMG，将 SnapDict 拖入 Applications 文件夹
-            3. 双击 DMG 中的「修复权限」脚本，输入密码完成权限修复
+            3. 终端执行 `sudo xattr -r -d com.apple.quarantine /Applications/SnapDict.app`
             4. 打开 SnapDict
           files: ${{ env.dmg_name }}
           draft: false

@@ -3,13 +3,13 @@
 import math
 from PIL import Image, ImageDraw, ImageFont
 
-WIDTH = 1320  # @2x for 660pt window
-HEIGHT = 800  # @2x for 400pt window
+# Match window size at 1x — Finder displays background at native pixel size
+WIDTH = 660
+HEIGHT = 400
 
-# Icon center positions (@2x coordinates)
-APP_X, APP_Y = 360, 340
-DROP_X, DROP_Y = 960, 340
-SCRIPT_X, SCRIPT_Y = 660, 640
+# Icon center positions (must match create-dmg --icon / --app-drop-link)
+APP_X, APP_Y = 180, 170
+DROP_X, DROP_Y = 480, 170
 
 
 def draw_gradient(img: Image.Image) -> None:
@@ -26,11 +26,11 @@ def draw_gradient(img: Image.Image) -> None:
 
 
 def draw_dashed_arrow(draw: ImageDraw.ImageDraw) -> None:
-    """Draw curved dashed arrow from app icon area to Applications area."""
-    start_x, start_y = APP_X + 100, APP_Y - 40
-    end_x, end_y = DROP_X - 100, DROP_Y - 40
+    """Draw curved dashed arrow from app icon to Applications."""
+    start_x, start_y = APP_X + 50, APP_Y - 20
+    end_x, end_y = DROP_X - 50, DROP_Y - 20
     mid_x = (start_x + end_x) / 2
-    mid_y = start_y - 160  # arc height
+    mid_y = start_y - 80  # arc height
 
     # Generate bezier curve points
     points = []
@@ -42,10 +42,10 @@ def draw_dashed_arrow(draw: ImageDraw.ImageDraw) -> None:
         points.append((x, y))
 
     # Draw dashed line
-    dash_len = 16
-    gap_len = 10
+    dash_len = 8
+    gap_len = 5
     color = (0x99, 0x99, 0x99)
-    line_width = 4
+    line_width = 2
     dist = 0
     drawing = True
     for i in range(len(points) - 1):
@@ -66,7 +66,7 @@ def draw_dashed_arrow(draw: ImageDraw.ImageDraw) -> None:
     ax, ay = points[-1]
     bx, by = points[-10]
     angle = math.atan2(ay - by, ax - bx)
-    arrow_len = 24
+    arrow_len = 12
     arrow_angle = math.pi / 6
     left_x = ax - arrow_len * math.cos(angle - arrow_angle)
     left_y = ay - arrow_len * math.sin(angle - arrow_angle)
@@ -78,16 +78,16 @@ def draw_dashed_arrow(draw: ImageDraw.ImageDraw) -> None:
 def draw_hint_text(draw: ImageDraw.ImageDraw) -> None:
     """Draw installation hint text at bottom."""
     try:
-        font = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 22)
+        font = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 11)
     except (OSError, IOError):
         font = ImageFont.load_default()
 
-    text = "将 SnapDict 拖入 Applications 文件夹完成安装  |  双击「修复权限」解除系统限制"
+    text = "将 SnapDict 拖入 Applications 文件夹完成安装"
     color = (0xAA, 0xAA, 0xAA)
     bbox = draw.textbbox((0, 0), text, font=font)
     tw = bbox[2] - bbox[0]
     x = (WIDTH - tw) / 2
-    y = HEIGHT - 60
+    y = HEIGHT - 30
     draw.text((x, y), text, fill=color, font=font)
 
 
