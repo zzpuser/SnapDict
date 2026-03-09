@@ -110,6 +110,9 @@ struct UnifiedPanelView: View {
         .onAppear {
             // 注册显示/重置回调
             PanelManager.shared.onShow = { shouldReset, selectedText in
+                #if DEBUG
+                print("[PanelManager.onShow] shouldReset=\(shouldReset), selectedText=\(selectedText ?? "nil")")
+                #endif
                 if shouldReset {
                     selectedTab = .translation
                     translationResetID = UUID()

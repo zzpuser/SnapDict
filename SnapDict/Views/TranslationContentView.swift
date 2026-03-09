@@ -175,11 +175,7 @@ struct TranslationContentView: View {
         .onChange(of: resetID) { _, _ in
             resetState()
             if isActive { isInputFocused = true }
-            if let text = initialQuery, !text.isEmpty {
-                query = text
-                initialQuery = nil
-                performTranslation()
-            }
+            // 不在此触发 performTranslation，由 onChange(of: initialQuery) 统一处理
         }
         .onChange(of: initialQuery) { _, newValue in
             if let text = newValue, !text.isEmpty {
@@ -701,6 +697,7 @@ struct TranslationContentView: View {
 
         PanelManager.shared.updatePanelWidth(for: inputType)
 
+        translationTask?.cancel()
         translationTask = Task {
             switch inputType {
             case .word:

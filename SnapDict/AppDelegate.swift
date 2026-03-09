@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var modelContainer: ModelContainer?
 
     private var statusItem: NSStatusItem!
+    private var pendingHotKeyTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         migrateUserDefaultsIfNeeded()
@@ -13,14 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Register hot key
         HotKeyManager.shared.onHotKey = { [weak self] in
-            guard let container = self?.modelContainer else { return }
-            var selectedText: String? = nil
-            let autoFetch = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.autoFetchSelectedText) as? Bool
-                ?? Constants.Defaults.autoFetchSelectedText
-            if autoFetch {
-                selectedText = SelectedTextReader.getSelectedText()
+            guard let self else { return }
+            self.pendingHotKeyTask?.cancel()
+            self.pendingHotKeyTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.handleHotKey()
             }
-            PanelManager.shared.showPanel(modelContainer: container, selectedText: selectedText)
         }
         HotKeyManager.shared.register()
 
@@ -31,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        pendingHotKeyTask?.cancel()
         WordPushScheduler.shared.stop()
     }
 
@@ -119,5 +119,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.performClick(nil)
         // 清除 menu，否则后续左键点击也会弹出菜单
         statusItem.menu = nil
+    }
+
+    private func handleHotKey() async {
+        guard let container = modelContainer else { return }
+
+        let autoFetch = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.autoFetchSelectedText) as? Bool
+            ?? Constants.Defaults.autoFetchSelectedText
+
+        #if DEBUG
+        print("[HotKey] triggered, autoFetch=\(autoFetch), accessibility=\(SelectedTextReader.isAccessibilityGranted())")
+        #endif
+
+        // 面板可见且不需要取词时，直接 toggle 隐藏
+        if PanelManager.shared.isPanelVisible && !(autoFetch && SelectedTextReader.isAccessibilityGranted()) {
+            #if DEBUG
+            print("[HotKey] panel visible, no autoFetch, toggle hide")
+            #endif
+            PanelManager.shared.showPanel(modelContainer: container)
+            return
+        }
+
+        guard autoFetch, SelectedTextReader.isAccessibilityGranted() else {
+            #if DEBUG
+            print("[HotKey] selectedText=nil")
+            #endif
+            PanelManager.shared.showPanel(modelContainer: container)
+            return
+        }
+
+        guard let context = SelectedTextReader.captureFrontmostAppContext() else {
+            #if DEBUG
+            print("[HotKey] no context, selectedText=nil")
+            #endif
+            PanelManager.shared.showPanel(modelContainer: container)
+            return
+        }
+
+        let selectedText = await SelectedTextReader.getSelectedTextForHotKey(from: context)
+        guard !Task.isCancelled else { return }
+
+        #if DEBUG
+        print("[HotKey] selectedText=\(selectedText ?? "nil")")
+        #endif
+        PanelManager.shared.showPanel(modelContainer: container, selectedText: selectedText)
     }
 }

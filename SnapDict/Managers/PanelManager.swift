@@ -43,6 +43,10 @@ final class PanelManager: NSObject, NSWindowDelegate {
     /// 切换 Tab 的回调
     var onSwitchTab: ((PanelTab) -> Void)?
 
+    var isPanelVisible: Bool {
+        panel?.isVisible == true
+    }
+
     private var lastHideDate: Date?
     private var localEventMonitor: Any?
 
@@ -92,6 +96,13 @@ final class PanelManager: NSObject, NSWindowDelegate {
         self.modelContainer = modelContainer
 
         if let panel, panel.isVisible {
+            if let selectedText, !selectedText.isEmpty {
+                // 面板已可见且有新文本：直接传递新查询，不走 toggle 逻辑
+                panel.makeKeyAndOrderFront(nil)
+                onShow?(false, selectedText)
+                return
+            }
+            // 面板已可见且无新文本：走 toggle 逻辑
             let hideOnFocus = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.hideOnFocusLost) as? Bool
                 ?? Constants.Defaults.hideOnFocusLost
             if !hideOnFocus && !panel.isKeyWindow {
