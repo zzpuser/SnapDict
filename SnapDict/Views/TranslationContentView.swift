@@ -30,7 +30,7 @@ struct TranslationContentView: View {
     @State private var examplesTask: Task<Void, Never>?
     @State private var sentenceResult: SentenceTranslationResult?
     @State private var currentInputType: InputType = .word
-    @State private var shimmerPhase: CGFloat = -200
+    @State private var shimmerPhase: CGFloat = 0
 
     // 流式中间状态
     @State private var partialWord: PartialWordResult?
@@ -201,12 +201,12 @@ struct TranslationContentView: View {
         }
         .onChange(of: isAnySkeletonVisible) { _, visible in
             if visible {
-                shimmerPhase = -200
+                shimmerPhase = 0
                 withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
-                    shimmerPhase = 400
+                    shimmerPhase = 1
                 }
             } else {
-                shimmerPhase = -200
+                shimmerPhase = 0
             }
         }
         .onAppear {
@@ -220,20 +220,24 @@ struct TranslationContentView: View {
 
     private func skeletonLine(width: CGFloat, height: CGFloat = 14) -> some View {
         RoundedRectangle(cornerRadius: 4)
-            .fill(.quaternary)
+            .fill(.tertiary)
             .frame(width: width, height: height)
     }
 
     private func withShimmer<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
         content()
             .overlay(
-                LinearGradient(
-                    gradient: Gradient(colors: [.clear, .white.opacity(0.4), .clear]),
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: 120)
-                .offset(x: shimmerPhase)
+                GeometryReader { geo in
+                    let shimmerWidth: CGFloat = 120
+                    let totalTravel = geo.size.width + shimmerWidth
+                    LinearGradient(
+                        gradient: Gradient(colors: [.clear, .white.opacity(0.4), .clear]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: shimmerWidth)
+                    .offset(x: -shimmerWidth + totalTravel * shimmerPhase)
+                }
             )
             .mask { content() }
     }
