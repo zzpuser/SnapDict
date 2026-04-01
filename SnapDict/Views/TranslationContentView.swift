@@ -22,6 +22,7 @@ struct TranslationContentView: View {
     @State private var debounceTask: Task<Void, Never>?
     @State private var translationTask: Task<Void, Never>?
     @State private var isSpeaking = false
+    @State private var speakTask: Task<Void, Never>?
     @State private var isMnemonicLoading = false
     @State private var isExamplesLoading = false
     @State private var mnemonicError: String?
@@ -824,6 +825,7 @@ struct TranslationContentView: View {
 
     private func speakWord(_ word: String) {
         if isSpeaking {
+            speakTask?.cancel()
             synthesizer.stopSpeaking(at: .immediate)
             Task { await ByteDanceTTSService.shared.stop() }
             isSpeaking = false
@@ -834,10 +836,10 @@ struct TranslationContentView: View {
         let engine = Constants.TTSEngine(rawValue: engineRaw) ?? .system
 
         isSpeaking = true
-        Task { @MainActor in
-            defer { isSpeaking = false }
-            switch engine {
-            case .system:
+        switch engine {
+        case .system:
+            speakTask = Task { @MainActor in
+                defer { isSpeaking = false }
                 let utterance = AVSpeechUtterance(string: word)
                 utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
                 utterance.rate = 0.45
@@ -845,10 +847,16 @@ struct TranslationContentView: View {
                 while synthesizer.isSpeaking {
                     try? await Task.sleep(for: .milliseconds(100))
                 }
-            case .byteDance:
+            }
+        case .byteDance:
+            speakTask = Task { @MainActor in
+                defer { isSpeaking = false }
                 do {
-                    try await ByteDanceTTSService.shared.speak(word)
+                    try await Task.detached {
+                        try await ByteDanceTTSService.shared.speak(word)
+                    }.value
                 } catch {
+                    if Task.isCancelled { return }
                     let fallback = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsFallbackToSystem) as? Bool
                         ?? Constants.Defaults.ttsFallbackToSystem
                     if fallback {

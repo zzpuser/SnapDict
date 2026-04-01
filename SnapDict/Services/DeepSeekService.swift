@@ -16,7 +16,7 @@ final class DeepSeekService: Sendable {
         forceNoAutoCorrect: Bool = false
     ) -> AsyncThrowingStream<PartialWordResult, Error> {
         AsyncThrowingStream { continuation in
-            let task = Task {
+            let task = Task.detached { [self] in
                 do {
                     let normalizedText = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                     let enableMnemonic = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.enableMnemonic) as? Bool
@@ -142,7 +142,7 @@ final class DeepSeekService: Sendable {
         skipCache: Bool = false
     ) -> AsyncThrowingStream<PartialSentenceResult, Error> {
         AsyncThrowingStream { continuation in
-            let task = Task {
+            let task = Task.detached { [self] in
                 do {
                     let normalizedText = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                     let cacheKey = "s:" + normalizedText
@@ -392,7 +392,7 @@ final class DeepSeekService: Sendable {
     /// 流式 SSE 调用，每次 yield 累积的完整文本
     private func callAPIStreaming(prompt: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
-            let task = Task {
+            let task = Task.detached { [self] in
                 do {
                     guard let apiKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.deepSeekAPIKey),
                           !apiKey.isEmpty else {

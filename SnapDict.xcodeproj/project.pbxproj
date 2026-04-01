@@ -238,7 +238,6 @@
 				};
 			};
 			buildConfigurationList = 210B942085ED4C8201155E9B /* Build configuration list for PBXProject "SnapDict" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -252,6 +251,7 @@
 				1BF14DE932BBCB7CF5D8B607 /* XCRemoteSwiftPackageReference "PartialJSON" */,
 			);
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 1871093CBC6AE3D1ED306A38 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -328,7 +328,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 2.0.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zzp.SnapDict;
 				PRODUCT_NAME = SnapDict;
 				SDKROOT = macosx;
@@ -352,7 +352,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 2.0.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zzp.SnapDict;
 				PRODUCT_NAME = SnapDict;
 				SDKROOT = macosx;

@@ -1,5 +1,5 @@
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
 
 /// 豆包 TTS 服务，调用字节跳动语音合成 V3 SSE API
 actor ByteDanceTTSService {
@@ -141,12 +141,14 @@ actor ByteDanceTTSService {
         self.engine = engine
         self.playerNode = playerNode
 
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            playerNode.scheduleFile(audioFile, at: nil, completionCallbackType: .dataPlayedBack) { _ in
-                continuation.resume()
-            }
-            playerNode.play()
-        }
+        // 计算音频时长
+        let duration = Double(audioFile.length) / format.sampleRate
+
+        await playerNode.scheduleFile(audioFile, at: nil)
+        playerNode.play()
+
+        // 用 Task.sleep 等待音频播放完毕，支持 Task 取消
+        try await Task.sleep(for: .milliseconds(Int(duration * 1000) + 50))
 
         stopEngine()
     }
