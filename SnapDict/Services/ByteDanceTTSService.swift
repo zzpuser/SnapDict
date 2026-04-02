@@ -122,7 +122,7 @@ actor ByteDanceTTSService {
         let audioFile = try AVAudioFile(forReading: tempURL)
         let format = audioFile.processingFormat
 
-        // 读取用户设置的线性音量比例（0.5~3.0），转换为 dB 增益
+        // 读取用户设置的线性音量比例（0.5~10.0），转换为 dB 增益
         let volumeScale = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsVolume) as? Float
             ?? Constants.Defaults.ttsVolume
         let gainDB = 20.0 * log10(volumeScale)
@@ -141,16 +141,18 @@ actor ByteDanceTTSService {
         self.engine = engine
         self.playerNode = playerNode
 
-        // 计算音频时长
-        let duration = Double(audioFile.length) / format.sampleRate
+        // 用完成回调精准等待播放结束，不再估算时长
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            playerNode.scheduleFile(audioFile, at: nil, completionCallbackType: .dataPlayedBack) { _ in
+                continuation.resume()
+            }
+            playerNode.play()
+        }
 
-        await playerNode.scheduleFile(audioFile, at: nil)
-        playerNode.play()
-
-        // 用 Task.sleep 等待音频播放完毕，支持 Task 取消
-        try await Task.sleep(for: .milliseconds(Int(duration * 1000) + 50))
-
-        stopEngine()
+        // 仅当 engine 未被新的 playAudio 调用替换时才清理
+        if self.engine === engine {
+            stopEngine()
+        }
     }
 
     private func stopEngine() {

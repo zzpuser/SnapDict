@@ -55,7 +55,7 @@ struct PanelSettingsView: View {
     @State private var ttsEngine: Constants.TTSEngine = .system
     @State private var ttsFallbackToSystem: Bool = Constants.Defaults.ttsFallbackToSystem
     @State private var ttsVoice: String = Constants.API.byteDanceTTSDefaultVoice
-    @State private var ttsVolume: Float = Constants.Defaults.ttsVolume  // 线性比例 0.5~3.0
+    @State private var ttsVolume: Float = Constants.Defaults.ttsVolume  // 线性比例 0.5~10.0
 
     // Push settings
     @State private var pushEnabled: Bool = false
@@ -379,12 +379,12 @@ struct PanelSettingsView: View {
                             HStack {
                                 Text("音量")
                                     .font(.system(size: 14))
-                                Slider(value: $ttsVolume, in: 0.5...3.0, step: 0.5)
+                                Slider(value: $ttsVolume, in: 0.5...10.0, step: 0.5)
                                     .frame(width: 140)
                                     .onChange(of: ttsVolume) { _, newValue in
                                         UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.ttsVolume)
                                     }
-                                Text(String(format: "%.0f%%", ttsVolume * 100))
+                                Text(String(format: "%.1fx", ttsVolume))
                                     .font(.system(size: 12).monospacedDigit())
                                     .foregroundStyle(.secondary)
                                     .frame(width: 34, alignment: .trailing)

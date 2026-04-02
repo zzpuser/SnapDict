@@ -81,20 +81,15 @@ jobs:
           git tag ${{ steps.version.outputs.tag }}
           git push origin ${{ steps.version.outputs.tag }}
 
-      - name: Generate changelog
-        id: changelog
+      - name: Extract release notes from README
+        id: notes
         run: |
-          # 获取上一个 tag
-          PREV_TAG=$(git tag --sort=-version:refname | grep '^v' | sed -n '2p')
-          if [ -n "$PREV_TAG" ]; then
-            LOG=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s" --no-merges)
-          else
-            LOG=$(git log --pretty=format:"- %s" --no-merges)
-          fi
-          # 写入多行输出
+          TAG="${{ steps.version.outputs.tag }}"
+          # 从 README.md 提取对应版本的更新内容（### vX.Y.Z 到下一个 ### 之间的内容）
+          NOTES=$(awk "/^### ${TAG}$/,/^### v/" README.md | head -n -1 | tail -n +2)
           {
-            echo "log<<EOF"
-            echo "$LOG"
+            echo "body<<EOF"
+            echo "$NOTES"
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
@@ -105,7 +100,7 @@ jobs:
           name: SnapDict ${{ steps.version.outputs.version }}
           body: |
             ## 更新内容
-            ${{ steps.changelog.outputs.log }}
+            ${{ steps.notes.outputs.body }}
 
             ## 安装方式
             1. 下载 DMG 文件
