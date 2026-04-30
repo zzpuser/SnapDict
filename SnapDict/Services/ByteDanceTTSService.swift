@@ -7,6 +7,7 @@ actor ByteDanceTTSService {
 
     private var engine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
+    private var playbackContinuation: CheckedContinuation<Void, Never>?
 
     private init() {}
 
@@ -143,8 +144,11 @@ actor ByteDanceTTSService {
 
         // 用完成回调精准等待播放结束，不再估算时长
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            playerNode.scheduleFile(audioFile, at: nil, completionCallbackType: .dataPlayedBack) { _ in
-                continuation.resume()
+            playbackContinuation = continuation
+            playerNode.scheduleFile(audioFile, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+                Task {
+                    await self?.finishPlaybackIfNeeded()
+                }
             }
             playerNode.play()
         }
@@ -160,6 +164,13 @@ actor ByteDanceTTSService {
         engine?.stop()
         playerNode = nil
         engine = nil
+        playbackContinuation?.resume()
+        playbackContinuation = nil
+    }
+
+    private func finishPlaybackIfNeeded() {
+        playbackContinuation?.resume()
+        playbackContinuation = nil
     }
 
     /// 停止当前播放
