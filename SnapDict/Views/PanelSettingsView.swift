@@ -41,21 +41,10 @@ struct PanelSettingsView: View {
     // API Keys
     @State private var deepSeekKey: String = ""
     @State private var dotKey: String = ""
-    @State private var byteDanceTTSAppId: String = ""
-    @State private var byteDanceTTSKey: String = ""
 
     // Saved keys (for tracking unsaved changes)
     @State private var savedDeepSeekKey: String = ""
     @State private var savedDotKey: String = ""
-    @State private var savedByteDanceTTSAppId: String = ""
-    @State private var savedByteDanceTTSKey: String = ""
-
-
-    // TTS
-    @State private var ttsEngine: Constants.TTSEngine = .system
-    @State private var ttsFallbackToSystem: Bool = Constants.Defaults.ttsFallbackToSystem
-    @State private var ttsVoice: String = Constants.API.byteDanceTTSDefaultVoice
-    @State private var ttsVolume: Float = Constants.Defaults.ttsVolume  // 线性比例 0.5~10.0
 
     // Push settings
     @State private var pushEnabled: Bool = false
@@ -92,6 +81,16 @@ struct PanelSettingsView: View {
     @State private var accessibilityGranted: Bool = false
     @State private var accessibilityPollTimer: Timer?
     @State private var eventMonitor: Any?
+
+    // TTS settings
+    @State private var ttsEngine: Constants.TTSEngine = .system
+    @State private var byteDanceTTSAppId: String = ""
+    @State private var byteDanceTTSKey: String = ""
+    @State private var savedByteDanceTTSAppId: String = ""
+    @State private var savedByteDanceTTSKey: String = ""
+    @State private var ttsFallbackToSystem: Bool = Constants.Defaults.ttsFallbackToSystem
+    @State private var ttsVoice: String = Constants.API.byteDanceTTSDefaultVoice
+    @State private var ttsVolume: Int = Constants.Defaults.ttsVolume
 
     // API test states
     enum TestState: Equatable {
@@ -293,7 +292,7 @@ struct PanelSettingsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("发音引擎")
                             .font(.system(size: 14))
-                        Picker("引擎", selection: $ttsEngine) {
+                        Picker("发音引擎", selection: $ttsEngine) {
                             ForEach(Constants.TTSEngine.allCases, id: \.self) { engine in
                                 Text(engine.displayName).tag(engine)
                             }
@@ -303,9 +302,6 @@ struct PanelSettingsView: View {
                         .onChange(of: ttsEngine) { _, newValue in
                             UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.ttsEngine)
                         }
-                        Text(ttsEngine == .byteDance ? "使用豆包在线语音合成" : "使用系统内置语音，无需联网")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
@@ -314,51 +310,16 @@ struct PanelSettingsView: View {
                     if ttsEngine == .byteDance {
                         Divider().padding(.leading, 14)
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 6) {
-                                Text("App ID")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 70, alignment: .leading)
-                                TextField("App ID", text: $byteDanceTTSAppId)
-                                    .textFieldStyle(.roundedBorder)
-                            }
-                            HStack(spacing: 6) {
-                                Text("Access Key")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 70, alignment: .leading)
-                                SecureKeyField(placeholder:"Access Key", text: $byteDanceTTSKey)
-                            }
-                            HStack(spacing: 6) {
-                                Text("从火山引擎控制台获取")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.tertiary)
-                                Spacer()
-                                apiTestButton(state: ttsTestState, action: { testTTS() })
-                                Button(ttsSaveState == .saved ? "已保存" : "保存") {
-                                    saveTTSKeysWithTest()
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                .disabled((byteDanceTTSAppId == savedByteDanceTTSAppId && byteDanceTTSKey == savedByteDanceTTSKey) || ttsTestState == .testing)
-                                .tint(ttsSaveState == .saved ? .green : nil)
-                            }
-                            if case .failure(let msg) = ttsTestState {
-                                Text(msg)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.red)
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        ttsApiKeyRow()
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
 
                         Divider().padding(.leading, 14)
 
                         HStack {
                             Text("音色")
                                 .font(.system(size: 14))
-                            Picker("音色", selection: $ttsVoice) {
+                            Picker("", selection: $ttsVoice) {
                                 ForEach(Constants.API.byteDanceTTSVoices, id: \.id) { voice in
                                     Text(voice.name).tag(voice.id)
                                 }
@@ -379,30 +340,40 @@ struct PanelSettingsView: View {
                             HStack {
                                 Text("音量")
                                     .font(.system(size: 14))
-                                Slider(value: $ttsVolume, in: 0.5...10.0, step: 0.5)
-                                    .frame(width: 140)
-                                    .onChange(of: ttsVolume) { _, newValue in
-                                        UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.ttsVolume)
-                                    }
-                                Text(String(format: "%.1fx", ttsVolume))
-                                    .font(.system(size: 12).monospacedDigit())
+                                Spacer()
+                                Text("\(ttsVolume)%")
+                                    .font(.system(size: 14, design: .monospaced))
                                     .foregroundStyle(.secondary)
-                                    .frame(width: 34, alignment: .trailing)
+                            }
+                            Slider(
+                                value: Binding(
+                                    get: { Double(ttsVolume) },
+                                    set: { ttsVolume = Int($0) }
+                                ),
+                                in: 10...100,
+                                step: 5
+                            )
+                            .onChange(of: ttsVolume) { _, newValue in
+                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.ttsVolume)
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
 
-                        Toggle("合成失败时降级为系统发音", isOn: $ttsFallbackToSystem)
-                            .font(.system(size: 12))
-                            .toggleStyle(.checkbox)
-                            .onChange(of: ttsFallbackToSystem) { _, newValue in
-                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.ttsFallbackToSystem)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 10)
+                        Divider().padding(.leading, 14)
+
+                        HStack {
+                            Text("合成失败时降级为系统发音")
+                            Spacer()
+                            Toggle("", isOn: $ttsFallbackToSystem)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                                .onChange(of: ttsFallbackToSystem) { _, newValue in
+                                    UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.ttsFallbackToSystem)
+                                }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
                     }
                 }
                 .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
@@ -722,7 +693,7 @@ struct PanelSettingsView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
 
-                    Text("清除翻译结果和语音缓存，不影响生词本数据")
+                    Text("清除翻译结果缓存，不影响生词本数据")
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -986,25 +957,6 @@ struct PanelSettingsView: View {
         }
     }
 
-    private func saveKey(
-        value: String,
-        defaultsKey: String,
-        savedKey: Binding<String>,
-        saveState: Binding<SaveState>
-    ) {
-        if value.isEmpty {
-            UserDefaults.standard.removeObject(forKey: defaultsKey)
-        } else {
-            UserDefaults.standard.set(value, forKey: defaultsKey)
-        }
-        savedKey.wrappedValue = value
-        saveState.wrappedValue = .saved
-        Task {
-            try? await Task.sleep(for: .seconds(2))
-            saveState.wrappedValue = .idle
-        }
-    }
-
     private func saveKeyWithTest(
         value: String,
         defaultsKey: String,
@@ -1076,6 +1028,118 @@ struct PanelSettingsView: View {
             if succeeded {
                 try? await Task.sleep(for: .seconds(3))
                 setState(.idle)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func ttsApiKeyRow() -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("豆包语音合成")
+                .font(.system(size: 14))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    TextField("App ID", text: $byteDanceTTSAppId)
+                        .textFieldStyle(.roundedBorder)
+                }
+                HStack(spacing: 6) {
+                    SecureKeyField(placeholder: "Access Key", text: $byteDanceTTSKey)
+                    apiTestButton(state: ttsTestState, action: { testTTS() })
+                    Button(ttsSaveState == .saved ? "已保存" : "保存") {
+                        saveTTSKeysWithTest()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(
+                        (byteDanceTTSAppId == savedByteDanceTTSAppId && byteDanceTTSKey == savedByteDanceTTSKey)
+                        || ttsTestState == .testing
+                    )
+                    .tint(ttsSaveState == .saved ? .green : nil)
+                }
+            }
+            Text("从火山引擎控制台获取")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+            if case .failure(let msg) = ttsTestState {
+                Text(msg)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func saveTTSKeysWithTest() {
+        guard !byteDanceTTSAppId.isEmpty, !byteDanceTTSKey.isEmpty else {
+            ttsTestState = .failure("请填写 App ID 和 Access Key")
+            return
+        }
+        ttsTestState = .testing
+        Task {
+            let previousAppId = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
+            let previousKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
+            UserDefaults.standard.set(byteDanceTTSAppId, forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
+            UserDefaults.standard.set(byteDanceTTSKey, forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
+            do {
+                let audioData = try await ByteDanceTTSService.shared.fetchAudio(text: "hello", skipCache: true)
+                // 播放测试音频
+                try await TTSManager.shared.playTestAudio(audioData)
+                savedByteDanceTTSAppId = byteDanceTTSAppId
+                savedByteDanceTTSKey = byteDanceTTSKey
+                ttsSaveState = .saved
+                ttsTestState = .success
+                try? await Task.sleep(for: .seconds(3))
+                ttsSaveState = .idle
+                ttsTestState = .idle
+            } catch {
+                // 回滚
+                if let previousAppId {
+                    UserDefaults.standard.set(previousAppId, forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
+                }
+                if let previousKey {
+                    UserDefaults.standard.set(previousKey, forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
+                }
+                ttsTestState = .failure(error.localizedDescription)
+            }
+        }
+    }
+
+    private func testTTS() {
+        let appId = byteDanceTTSAppId.isEmpty
+            ? (UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId) ?? "")
+            : byteDanceTTSAppId
+        let key = byteDanceTTSKey.isEmpty
+            ? (UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey) ?? "")
+            : byteDanceTTSKey
+        guard !appId.isEmpty, !key.isEmpty else {
+            ttsTestState = .failure("请填写 App ID 和 Access Key")
+            return
+        }
+        ttsTestState = .testing
+        Task {
+            let previousAppId = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
+            let previousKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
+            UserDefaults.standard.set(appId, forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
+            UserDefaults.standard.set(key, forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
+            defer {
+                if byteDanceTTSAppId != savedByteDanceTTSAppId || byteDanceTTSKey != savedByteDanceTTSKey {
+                    if let previousAppId { UserDefaults.standard.set(previousAppId, forKey: Constants.UserDefaultsKey.byteDanceTTSAppId) }
+                    else { UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId) }
+                    if let previousKey { UserDefaults.standard.set(previousKey, forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey) }
+                    else { UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey) }
+                }
+            }
+            do {
+                let audioData = try await ByteDanceTTSService.shared.fetchAudio(text: "hello", skipCache: true)
+                try await TTSManager.shared.playTestAudio(audioData)
+                ttsTestState = .success
+                try? await Task.sleep(for: .seconds(3))
+                ttsTestState = .idle
+            } catch {
+                ttsTestState = .failure(error.localizedDescription)
             }
         }
     }
@@ -1156,77 +1220,6 @@ struct PanelSettingsView: View {
             } catch {
                 connectedDevices = []
                 connectionState = .error(error.localizedDescription)
-            }
-        }
-    }
-
-    private func saveTTSKeys() {
-        saveKey(value: byteDanceTTSAppId, defaultsKey: Constants.UserDefaultsKey.byteDanceTTSAppId,
-                savedKey: $savedByteDanceTTSAppId, saveState: $ttsSaveState)
-        saveKey(value: byteDanceTTSKey, defaultsKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey,
-                savedKey: $savedByteDanceTTSKey, saveState: $ttsSaveState)
-    }
-
-    private func testTTS() {
-        guard !byteDanceTTSAppId.isEmpty, !byteDanceTTSKey.isEmpty else {
-            ttsTestState = .failure("请先填写 App ID 和 Access Key")
-            return
-        }
-        ttsTestState = .testing
-        Task {
-            let prevAppId = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
-            let prevKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
-            UserDefaults.standard.set(byteDanceTTSAppId, forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
-            UserDefaults.standard.set(byteDanceTTSKey, forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
-            defer {
-                if byteDanceTTSAppId != savedByteDanceTTSAppId || byteDanceTTSKey != savedByteDanceTTSKey {
-                    UserDefaults.standard.set(prevAppId, forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
-                    UserDefaults.standard.set(prevKey, forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
-                }
-            }
-            do {
-                try await ByteDanceTTSService.shared.speak("hello")
-                ttsTestState = .success
-                try? await Task.sleep(for: .seconds(3))
-                ttsTestState = .idle
-            } catch {
-                ttsTestState = .failure(error.localizedDescription)
-            }
-        }
-    }
-
-    private func saveTTSKeysWithTest() {
-        guard !byteDanceTTSAppId.isEmpty, !byteDanceTTSKey.isEmpty else {
-            ttsTestState = .failure("请先填写 App ID 和 Access Key")
-            return
-        }
-        ttsTestState = .testing
-        Task {
-            let prevAppId = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
-            let prevKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
-            UserDefaults.standard.set(byteDanceTTSAppId, forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
-            UserDefaults.standard.set(byteDanceTTSKey, forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
-            do {
-                try await ByteDanceTTSService.shared.speak("hello")
-                savedByteDanceTTSAppId = byteDanceTTSAppId
-                savedByteDanceTTSKey = byteDanceTTSKey
-                ttsSaveState = .saved
-                ttsTestState = .success
-                try? await Task.sleep(for: .seconds(3))
-                ttsSaveState = .idle
-                ttsTestState = .idle
-            } catch {
-                if let prevAppId {
-                    UserDefaults.standard.set(prevAppId, forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
-                } else {
-                    UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId)
-                }
-                if let prevKey {
-                    UserDefaults.standard.set(prevKey, forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
-                } else {
-                    UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey)
-                }
-                ttsTestState = .failure(error.localizedDescription)
             }
         }
     }
@@ -1366,18 +1359,6 @@ struct PanelSettingsView: View {
         savedDeepSeekKey = deepSeekKey
         dotKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.dotAPIKey) ?? ""
         savedDotKey = dotKey
-        byteDanceTTSAppId = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId) ?? ""
-        savedByteDanceTTSAppId = byteDanceTTSAppId
-        byteDanceTTSKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey) ?? ""
-        savedByteDanceTTSKey = byteDanceTTSKey
-        let engineRaw = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.ttsEngine) ?? ""
-        ttsEngine = Constants.TTSEngine(rawValue: engineRaw) ?? .system
-        ttsFallbackToSystem = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsFallbackToSystem) as? Bool
-            ?? Constants.Defaults.ttsFallbackToSystem
-        ttsVoice = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSVoice)
-            ?? Constants.API.byteDanceTTSDefaultVoice
-        ttsVolume = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsVolume) as? Float
-            ?? Constants.Defaults.ttsVolume
         pushEnabled = UserDefaults.standard.bool(forKey: Constants.UserDefaultsKey.pushEnabled)
         pushInterval = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.pushInterval) as? Int
             ?? Constants.Defaults.pushIntervalMinutes
@@ -1434,6 +1415,18 @@ struct PanelSettingsView: View {
                 }
             }
         }
+        ttsEngine = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.ttsEngine)
+            .flatMap { Constants.TTSEngine(rawValue: $0) } ?? .system
+        byteDanceTTSAppId = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId) ?? ""
+        savedByteDanceTTSAppId = byteDanceTTSAppId
+        byteDanceTTSKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey) ?? ""
+        savedByteDanceTTSKey = byteDanceTTSKey
+        ttsFallbackToSystem = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsFallbackToSystem) as? Bool
+            ?? Constants.Defaults.ttsFallbackToSystem
+        ttsVoice = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSVoice)
+            ?? Constants.API.byteDanceTTSDefaultVoice
+        ttsVolume = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsVolume) as? Int
+            ?? Constants.Defaults.ttsVolume
         shortcutText = loadShortcutText()
         updateCacheSize()
     }

@@ -20,13 +20,15 @@ enum Constants {
         static let byteDanceTTSEndpoint = "https://openspeech.bytedance.com/api/v3/tts/unidirectional/sse"
         static let byteDanceTTSResourceId = "seed-tts-2.0"
         static let byteDanceTTSVoices: [(id: String, name: String)] = [
-            ("zh_female_vv_uranus_bigtts", "VV(女)"),
-            ("zh_female_tianmeixiaoyuan_uranus_bigtts", "甜美小源(女)"),
-            ("zh_male_sunwukong_uranus_bigtts", "悟空(男)"),
-            ("en_female_stokie_uranus_bigtts", "Stokie(女)"),
-            ("en_male_tim_uranus_bigtts", "Tim(男)"),
+            ("zh_female_vv_uranus_bigtts", "VV（女）"),
+            ("zh_female_tianmeixiaoyuan_uranus_bigtts", "甜美小源（女）"),
+            ("zh_male_sunwukong_uranus_bigtts", "悟空（男）"),
+            ("en_female_stokie_uranus_bigtts", "Stokie（女，英文）"),
+            ("en_male_tim_uranus_bigtts", "Tim（男，英文）"),
         ]
         static let byteDanceTTSDefaultVoice = "zh_female_vv_uranus_bigtts"
+        /// TTS 下载/准备阶段总超时（秒）：SSE 流挂起时的兜底，超时自动取消并回退
+        static let ttsFetchTimeout: TimeInterval = 20
     }
 
     enum TTSEngine: String, CaseIterable {
@@ -128,12 +130,6 @@ enum Constants {
         static let enableMnemonic = "enableMnemonic"
         static let showExamples = "showExamples"
         static let showAnalysis = "showAnalysis"
-        static let ttsEngine = "ttsEngine"
-        static let byteDanceTTSAppId = "byteDanceTTSAppId"
-        static let byteDanceTTSAPIKey = "byteDanceTTSAPIKey"
-        static let ttsFallbackToSystem = "ttsFallbackToSystem"
-        static let byteDanceTTSVoice = "byteDanceTTSVoice"
-        static let ttsVolume = "ttsVolume"
         static let hideOnFocusLost = "hideOnFocusLost"
         static let autoFetchSelectedText = "autoFetchSelectedText"
         static let pushRandomMode = "pushRandomMode"
@@ -142,6 +138,12 @@ enum Constants {
         static let ditherKernel = "ditherKernel"
         static let panelHeightWordBook = "panelHeightWordBook"
         static let panelHeightSettings = "panelHeightSettings"
+        static let ttsEngine = "ttsEngine"
+        static let byteDanceTTSAppId = "byteDanceTTSAppId"
+        static let byteDanceTTSAPIKey = "byteDanceTTSAPIKey"
+        static let ttsFallbackToSystem = "ttsFallbackToSystem"
+        static let byteDanceTTSVoice = "byteDanceTTSVoice"
+        static let ttsVolume = "ttsVolume"
     }
 
     enum Defaults {
@@ -151,18 +153,19 @@ enum Constants {
         static let enableMnemonic = true
         static let showExamples = true
         static let showAnalysis = true
-        static let ttsFallbackToSystem = true
-        static let ttsVolume: Float = 1.0
         static let hideOnFocusLost = true
         static let autoFetchSelectedText = false
         static let pushMode: PushMode = .text
         static let ditherType: DitherType = .none
         static let ditherKernel: DitherKernel = .floydSteinberg
         static let pushRandomMode: PushRandomMode = .minCount
+        static let ttsFallbackToSystem = true
+        static let ttsVolume = 100
     }
 
     enum Notification {
         static let openWordBook = Foundation.Notification.Name("SnapDict.openWordBook")
         static let openSettings = Foundation.Notification.Name("SnapDict.openSettings")
+        static let ttsPlaybackStateChanged = Foundation.Notification.Name("SnapDict.ttsPlaybackStateChanged")
     }
 }

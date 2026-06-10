@@ -109,7 +109,9 @@ final class PanelManager: NSObject, NSWindowDelegate {
                 panel.makeKeyAndOrderFront(nil)
                 return
             }
+            TTSManager.shared.stop()
             panel.orderOut(nil)
+            lastHideDate = Date()
             return
         }
 
@@ -127,6 +129,7 @@ final class PanelManager: NSObject, NSWindowDelegate {
     }
 
     func hidePanel() {
+        TTSManager.shared.stop()
         animateHide {
             self.lastHideDate = Date()
         }

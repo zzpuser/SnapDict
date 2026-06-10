@@ -30,6 +30,7 @@
 		72E3D69580D7C0A66A9635E4 /* WordCardRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB31BABC4AA77535E95EA0F2 /* WordCardRenderer.swift */; };
 		734097A4ABB033C89E07345B /* PanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC24D800B3D6627EEEA620AD /* PanelManager.swift */; };
 		75CFB7553D471667A470BACD /* TranslationCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AE3856D11F007BDE4D15CF /* TranslationCache.swift */; };
+		92CE3C7355C616ECA61EE43C /* TTSManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B409B3E3B74593D88A2FBB91 /* TTSManager.swift */; };
 		9599AD5D4133DB7732639567 /* TranslationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6135220CCDC4F0D0642313DB /* TranslationPanel.swift */; };
 		960753BF996C1E0E36AD3201 /* SelectedTextReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E79642B8AF9C7EBD30DE10DF /* SelectedTextReader.swift */; };
 		9836EB46097C5FF856609C1B /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62566692D40C75E394760BEE /* Constants.swift */; };
@@ -63,6 +64,7 @@
 		8E98A6F746E6B76F170CB3BD /* WordBookManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordBookManager.swift; sourceTree = "<group>"; };
 		9870533FB579328650A06CDE /* SnapDictApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapDictApp.swift; sourceTree = "<group>"; };
 		A7824FA222C1036F420CDA18 /* TTSCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSCache.swift; sourceTree = "<group>"; };
+		B409B3E3B74593D88A2FBB91 /* TTSManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSManager.swift; sourceTree = "<group>"; };
 		BB31BABC4AA77535E95EA0F2 /* WordCardRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordCardRenderer.swift; sourceTree = "<group>"; };
 		BCBB87282810B7654AB17D42 /* DitherSimulator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DitherSimulator.swift; sourceTree = "<group>"; };
 		BE4C8BFFB9EBAC2B8E464950 /* UnifiedPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedPanelView.swift; sourceTree = "<group>"; };
@@ -146,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				CC24D800B3D6627EEEA620AD /* PanelManager.swift */,
+				B409B3E3B74593D88A2FBB91 /* TTSManager.swift */,
 				8E98A6F746E6B76F170CB3BD /* WordBookManager.swift */,
 				0748A4008F7A3D071ECD5240 /* WordPushScheduler.swift */,
 			);
@@ -296,6 +299,7 @@
 				2234A48FD3587C90A0546093 /* SentenceTranslationView.swift in Sources */,
 				F35B183519A71828050864B4 /* SnapDictApp.swift in Sources */,
 				474A49DBFB62CF07E9EC44FF /* TTSCache.swift in Sources */,
+				92CE3C7355C616ECA61EE43C /* TTSManager.swift in Sources */,
 				75CFB7553D471667A470BACD /* TranslationCache.swift in Sources */,
 				DA7A7E8389087EFD5CE77EC2 /* TranslationContentView.swift in Sources */,
 				9599AD5D4133DB7732639567 /* TranslationPanel.swift in Sources */,
@@ -328,7 +332,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.0.5;
+				MARKETING_VERSION = 2.0.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zzp.SnapDict;
 				PRODUCT_NAME = SnapDict;
 				SDKROOT = macosx;
@@ -352,7 +356,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.0.5;
+				MARKETING_VERSION = 2.0.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zzp.SnapDict;
 				PRODUCT_NAME = SnapDict;
 				SDKROOT = macosx;

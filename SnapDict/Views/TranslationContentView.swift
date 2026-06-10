@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import AVFoundation
 
 struct TranslationContentView: View {
     /// 每次变化时重置所有状态（由 UnifiedPanelView 在 shouldReset 时更新）
@@ -21,8 +20,6 @@ struct TranslationContentView: View {
     @State private var isSaved = false
     @State private var debounceTask: Task<Void, Never>?
     @State private var translationTask: Task<Void, Never>?
-    @State private var isSpeaking = false
-    @State private var speakTask: Task<Void, Never>?
     @State private var isMnemonicLoading = false
     @State private var isExamplesLoading = false
     @State private var mnemonicError: String?
@@ -36,8 +33,6 @@ struct TranslationContentView: View {
     // 流式中间状态
     @State private var partialWord: PartialWordResult?
     @State private var partialSentence: PartialSentenceResult?
-
-    private let synthesizer = AVSpeechSynthesizer()
 
     @State private var contentHeight: CGFloat = 0
 
@@ -149,18 +144,17 @@ struct TranslationContentView: View {
                     .onGeometryChange(for: CGFloat.self) { proxy in
                         proxy.size.height
                     } action: { newHeight in
+                        guard contentHeight != newHeight else { return }
                         contentHeight = newHeight
+                        if hasContent {
+                            onContentHeightChange?(newHeight)
+                        }
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity)
         .background(.clear)
-        .onChange(of: contentHeight) { _, newHeight in
-            if hasContent {
-                onContentHeightChange?(newHeight)
-            }
-        }
         .onChange(of: hasContent) { _, newValue in
             if newValue {
                 if contentHeight <= 0 {
@@ -324,7 +318,7 @@ struct TranslationContentView: View {
         // 拼写纠正提示（流式阶段也显示）
         partialCorrectionBanner(partial)
 
-        // Word + phonetic + speak/save buttons
+        // Word + phonetic + speaker + save button
         if let word = partial.word {
             HStack(alignment: .center) {
                 Text(word)
@@ -336,17 +330,7 @@ struct TranslationContentView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Button {
-                    speakWord(word)
-                } label: {
-                    Image(systemName: isSpeaking ? "waveform" : "speaker.wave.2")
-                        .font(.system(size: 16))
-                        .foregroundStyle(isSpeaking ? Color.accentColor : .secondary)
-                        .symbolEffect(.variableColor, isActive: isSpeaking)
-                }
-                .buttonStyle(.plain)
-                .help("朗读 (⌘S)")
-                .keyboardShortcut("s", modifiers: .command)
+                SpeakerButton(word: word)
 
                 Spacer()
 
@@ -361,6 +345,7 @@ struct TranslationContentView: View {
                 .help(isSaved ? "取消收藏 (⌘D)" : "保存到生词本 (⌘D)")
                 .keyboardShortcut("d", modifiers: .command)
             }
+
         } else {
             HStack {
                 skeletonLine(width: 120, height: 22)
@@ -585,7 +570,7 @@ struct TranslationContentView: View {
         // 拼写纠正提示
         correctionBanner(result)
 
-        // Word + phonetic + save button
+        // Word + phonetic + speaker + save button
         HStack(alignment: .center) {
             Text(result.word)
                 .font(.system(size: 22, weight: .semibold))
@@ -596,17 +581,7 @@ struct TranslationContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Button {
-                speakWord(result.word)
-            } label: {
-                Image(systemName: isSpeaking ? "waveform" : "speaker.wave.2")
-                    .font(.system(size: 16))
-                    .foregroundStyle(isSpeaking ? Color.accentColor : .secondary)
-                    .symbolEffect(.variableColor, isActive: isSpeaking)
-            }
-            .buttonStyle(.plain)
-            .help("朗读 (⌘S)")
-            .keyboardShortcut("s", modifiers: .command)
+            SpeakerButton(word: result.word)
 
             Spacer()
 
@@ -733,7 +708,7 @@ struct TranslationContentView: View {
                                 isSaved = WordBookManager.shared.isWordSaved(result!.word)
                                 // 如果在流式过程中已收藏，用完整数据更新数据库
                                 if isSaved {
-                                    try? WordBookManager.shared.saveWord(from: result!)
+                                    _ = try? WordBookManager.shared.saveWord(from: result!)
                                 }
                             }
                         } else {
@@ -803,6 +778,7 @@ struct TranslationContentView: View {
     }
 
     private func resetState() {
+        TTSManager.shared.stop()
         debounceTask?.cancel()
         translationTask?.cancel()
         mnemonicTask?.cancel()
@@ -821,56 +797,6 @@ struct TranslationContentView: View {
         mnemonicError = nil
         examplesError = nil
         isSaved = false
-    }
-
-    private func speakWord(_ word: String) {
-        if isSpeaking {
-            speakTask?.cancel()
-            synthesizer.stopSpeaking(at: .immediate)
-            Task { await ByteDanceTTSService.shared.stop() }
-            isSpeaking = false
-            return
-        }
-
-        let engineRaw = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.ttsEngine) ?? ""
-        let engine = Constants.TTSEngine(rawValue: engineRaw) ?? .system
-
-        isSpeaking = true
-        switch engine {
-        case .system:
-            speakTask = Task { @MainActor in
-                defer { isSpeaking = false }
-                let utterance = AVSpeechUtterance(string: word)
-                utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-                utterance.rate = 0.45
-                synthesizer.speak(utterance)
-                while synthesizer.isSpeaking {
-                    try? await Task.sleep(for: .milliseconds(100))
-                }
-            }
-        case .byteDance:
-            speakTask = Task { @MainActor in
-                defer { isSpeaking = false }
-                do {
-                    try await Task.detached {
-                        try await ByteDanceTTSService.shared.speak(word)
-                    }.value
-                } catch {
-                    if Task.isCancelled { return }
-                    let fallback = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsFallbackToSystem) as? Bool
-                        ?? Constants.Defaults.ttsFallbackToSystem
-                    if fallback {
-                        let utterance = AVSpeechUtterance(string: word)
-                        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-                        utterance.rate = 0.45
-                        synthesizer.speak(utterance)
-                        while synthesizer.isSpeaking {
-                            try? await Task.sleep(for: .milliseconds(100))
-                        }
-                    }
-                }
-            }
-        }
     }
 
     @ViewBuilder
@@ -1123,4 +1049,30 @@ struct TranslationContentView: View {
         }
     }
 
+}
+
+// MARK: - Speaker Button (隔离 TTS 观察范围，避免 isPlaying 变化触发整个翻译视图重渲染)
+
+private struct SpeakerButton: View {
+    let word: String
+    @State private var isPlaying = false
+
+    var body: some View {
+        Button {
+            TTSManager.shared.speak(word)
+        } label: {
+            Image(systemName: isPlaying ? "waveform" : "speaker.wave.2")
+                .font(.system(size: 16))
+                .foregroundStyle(isPlaying ? Color.accentColor : .secondary)
+        }
+        .buttonStyle(.plain)
+        .help("朗读 (⌘S)")
+        .keyboardShortcut("s", modifiers: .command)
+        .onAppear {
+            isPlaying = TTSManager.shared.isPlaying
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Constants.Notification.ttsPlaybackStateChanged)) { notification in
+            isPlaying = notification.userInfo?["isPlaying"] as? Bool ?? TTSManager.shared.isPlaying
+        }
+    }
 }

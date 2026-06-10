@@ -29,6 +29,8 @@ struct SnapDictApp: App {
                 }
             }
 
+            try Self.clearLegacyTTSCacheIfNeeded(at: storeURL)
+
             let config = ModelConfiguration(url: storeURL)
             container = try ModelContainer(for: WordEntry.self, TranslationCache.self, TTSCache.self, configurations: config)
         } catch {
@@ -43,5 +45,42 @@ struct SnapDictApp: App {
 
     var body: some Scene {
         Settings { EmptyView() }
+    }
+
+    private static func clearLegacyTTSCacheIfNeeded(at storeURL: URL) throws {
+        let cleanupKey = "didResetRebuiltTTSCache"
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: cleanupKey) else { return }
+
+        let fm = FileManager.default
+        let hasStoreFiles =
+            fm.fileExists(atPath: storeURL.path) ||
+            fm.fileExists(atPath: "\(storeURL.path)-wal") ||
+            fm.fileExists(atPath: "\(storeURL.path)-shm")
+
+        guard hasStoreFiles else {
+            defaults.set(true, forKey: cleanupKey)
+            return
+        }
+
+        let config = ModelConfiguration(url: storeURL)
+        let legacyContainer = try ModelContainer(for: WordEntry.self, TranslationCache.self, TTSCache.self, LegacyTTSCache.self, configurations: config)
+        let context = ModelContext(legacyContainer)
+        try? context.delete(model: LegacyTTSCache.self)
+        try? context.save()
+        defaults.set(true, forKey: cleanupKey)
+    }
+}
+
+@Model
+private final class LegacyTTSCache {
+    @Attribute(.unique) var word: String
+    @Attribute(.externalStorage) var audioData: Data
+    var createdAt: Date
+
+    init(word: String, audioData: Data, createdAt: Date = .now) {
+        self.word = word
+        self.audioData = audioData
+        self.createdAt = createdAt
     }
 }

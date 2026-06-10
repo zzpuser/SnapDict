@@ -1,59 +1,88 @@
 import Foundation
-@preconcurrency import AVFoundation
 
-/// 豆包 TTS 服务，调用字节跳动语音合成 V3 SSE API
-actor ByteDanceTTSService {
+enum TTSError: LocalizedError {
+    case notConfigured
+    case requestFailed(statusCode: Int)
+    case apiError(String)
+    case emptyAudio
+    case invalidResponse
+
+    var errorDescription: String? {
+        switch self {
+        case .notConfigured:
+            return "未配置豆包语音 App ID 或 Access Key，请在设置中填写"
+        case .requestFailed(let code):
+            return "请求失败 (HTTP \(code))"
+        case .apiError(let message):
+            return "语音合成错误: \(message)"
+        case .emptyAudio:
+            return "音频数据为空"
+        case .invalidResponse:
+            return "响应格式无效"
+        }
+    }
+}
+
+@Observable
+final class ByteDanceTTSService: Sendable {
     static let shared = ByteDanceTTSService()
-
-    private var engine: AVAudioEngine?
-    private var playerNode: AVAudioPlayerNode?
-
     private init() {}
 
-    /// 合成并播放语音，返回时已播放完毕或抛出错误
-    func speak(_ text: String) async throws {
+    /// 获取音频数据（优先缓存），返回 MP3 Data
+    func fetchAudio(text: String, skipCache: Bool = false) async throws -> Data {
         let appId = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAppId) ?? ""
         let accessKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSAPIKey) ?? ""
         guard !appId.isEmpty, !accessKey.isEmpty else {
-            throw TTSError.missingAPIKey
+            throw TTSError.notConfigured
         }
 
         let speaker = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSVoice)
             ?? Constants.API.byteDanceTTSDefaultVoice
+        let volume = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsVolume) as? Int
+            ?? Constants.Defaults.ttsVolume
+
         let cacheKey = "\(speaker):\(text)"
 
-        // 查缓存
-        if let cachedAudio = CacheService.shared.getCachedAudio(for: cacheKey) {
-            try await playAudio(cachedAudio)
-            return
+        // 检查缓存
+        if !skipCache, let cached = CacheService.shared.getCachedAudio(for: cacheKey) {
+            return cached
         }
 
-        let audioData = try await fetchAudio(text: text, appId: appId, accessKey: accessKey, speaker: speaker)
-        // 写缓存
+        // SSE 流式获取音频
+        let audioData = try await fetchFromAPI(
+            text: text,
+            appId: appId,
+            accessKey: accessKey,
+            speaker: speaker,
+            volume: volume
+        )
+
+        // 缓存结果
         CacheService.shared.cacheAudio(audioData, for: cacheKey)
-        try await playAudio(audioData)
+
+        return audioData
     }
 
     // MARK: - Private
 
-    private func fetchAudio(text: String, appId: String, accessKey: String, speaker: String) async throws -> Data {
-        guard let url = URL(string: Constants.API.byteDanceTTSEndpoint) else {
-            throw TTSError.invalidURL
-        }
-
-        var request = URLRequest(url: url)
+    private func fetchFromAPI(
+        text: String,
+        appId: String,
+        accessKey: String,
+        speaker: String,
+        volume: Int
+    ) async throws -> Data {
+        let url = URL(string: Constants.API.byteDanceTTSEndpoint)!
+        var request = URLRequest(url: url, timeoutInterval: 30)
         request.httpMethod = "POST"
         request.setValue(appId, forHTTPHeaderField: "X-Api-App-Id")
         request.setValue(accessKey, forHTTPHeaderField: "X-Api-Access-Key")
         request.setValue(Constants.API.byteDanceTTSResourceId, forHTTPHeaderField: "X-Api-Resource-Id")
-        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 30
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
 
         let body: [String: Any] = [
-            "user": [
-                "uid": "snapdict_user"
-            ],
+            "user": ["uid": "snapdict_user"],
             "req_params": [
                 "text": text,
                 "speaker": speaker,
@@ -61,127 +90,57 @@ actor ByteDanceTTSService {
                 "audio_params": [
                     "format": "mp3",
                     "sample_rate": 24000,
-                    "loudness_rate": 100
-                ]
-            ]
+                    "loudness_rate": volume,
+                ],
+            ],
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        // 使用 bytes(for:) 流式读取 SSE 响应
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw TTSError.invalidResponse
         }
         guard httpResponse.statusCode == 200 else {
-            throw TTSError.apiError("HTTP \(httpResponse.statusCode)")
+            throw TTSError.requestFailed(statusCode: httpResponse.statusCode)
         }
 
-        var audioData = Data()
+        var audioBuffer = Data()
 
-        // 逐行解析 SSE 事件，每个 data: 行立即处理
         for try await line in bytes.lines {
-            // SSE 格式: "data: {json}" 或 "data:{json}"
-            let dataPrefix = "data:"
-            guard line.hasPrefix(dataPrefix) else { continue }
+            try Task.checkCancellation()
 
-            let jsonStr = String(line.dropFirst(dataPrefix.count)).trimmingCharacters(in: .whitespaces)
-            guard !jsonStr.isEmpty,
-                  let lineData = jsonStr.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
-            else { continue }
+            guard line.hasPrefix("data:") else { continue }
+            let payload = String(line.dropFirst(5))
 
-            let code = json["code"] as? Int ?? 0
-            if code != 0 && code != 20000000 {
-                let message = json["message"] as? String ?? "错误码 \(code)"
+            guard let jsonData = payload.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                  let code = json["code"] as? Int else {
+                continue
+            }
+
+            // 非 0 且非 20000000 视为错误
+            if code != 0 && code != 20_000_000 {
+                let message = json["message"] as? String ?? "未知错误"
                 throw TTSError.apiError(message)
             }
-            if let part = json["data"] as? String, !part.isEmpty,
-               let partData = Data(base64Encoded: part) {
-                audioData.append(partData)
+
+            // 解码 base64 音频片段
+            if let base64String = json["data"] as? String,
+               let chunk = Data(base64Encoded: base64String) {
+                audioBuffer.append(chunk)
             }
-            if code == 20000000 {
+
+            // 传输完成
+            if code == 20_000_000 {
                 break
             }
         }
 
-        guard !audioData.isEmpty else {
-            throw TTSError.parseError("未收到音频数据")
-        }
-        return audioData
-    }
-
-    private func playAudio(_ data: Data) async throws {
-        stopEngine()
-
-        // AVAudioFile 需要文件路径，写临时文件
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("snapdict_tts.mp3")
-        try data.write(to: tempURL)
-        defer { try? FileManager.default.removeItem(at: tempURL) }
-
-        let audioFile = try AVAudioFile(forReading: tempURL)
-        let format = audioFile.processingFormat
-
-        // 读取用户设置的线性音量比例（0.5~10.0），转换为 dB 增益
-        let volumeScale = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsVolume) as? Float
-            ?? Constants.Defaults.ttsVolume
-        let gainDB = 20.0 * log10(volumeScale)
-
-        let engine = AVAudioEngine()
-        let playerNode = AVAudioPlayerNode()
-        let eqNode = AVAudioUnitEQ()
-        // 全频段整体增益
-        eqNode.globalGain = gainDB
-
-        engine.attach(playerNode)
-        engine.attach(eqNode)
-        engine.connect(playerNode, to: eqNode, format: format)
-        engine.connect(eqNode, to: engine.mainMixerNode, format: format)
-        try engine.start()
-        self.engine = engine
-        self.playerNode = playerNode
-
-        // 用完成回调精准等待播放结束，不再估算时长
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            playerNode.scheduleFile(audioFile, at: nil, completionCallbackType: .dataPlayedBack) { _ in
-                continuation.resume()
-            }
-            playerNode.play()
+        guard !audioBuffer.isEmpty else {
+            throw TTSError.emptyAudio
         }
 
-        // 仅当 engine 未被新的 playAudio 调用替换时才清理
-        if self.engine === engine {
-            stopEngine()
-        }
-    }
-
-    private func stopEngine() {
-        playerNode?.stop()
-        engine?.stop()
-        playerNode = nil
-        engine = nil
-    }
-
-    /// 停止当前播放
-    func stop() {
-        stopEngine()
-    }
-
-    enum TTSError: LocalizedError {
-        case missingAPIKey
-        case invalidURL
-        case invalidResponse
-        case parseError(String)
-        case apiError(String)
-
-        var errorDescription: String? {
-            switch self {
-            case .missingAPIKey: return "请先在设置中填写豆包 TTS App ID 和 Access Key"
-            case .invalidURL: return "无效的 API 地址"
-            case .invalidResponse: return "无效的服务器响应"
-            case .parseError(let detail): return "解析音频数据失败: \(detail)"
-            case .apiError(let msg): return "API 错误: \(msg)"
-            }
-        }
+        return audioBuffer
     }
 }

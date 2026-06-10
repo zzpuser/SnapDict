@@ -166,10 +166,9 @@ final class CacheService: @unchecked Sendable {
         }
     }
 
-    // MARK: - TTS Cache
+    // MARK: - TTS Audio Cache
 
-    func getCachedAudio(for word: String) -> Data? {
-        let key = normalizeKey(word)
+    func getCachedAudio(for key: String) -> Data? {
         return queue.sync {
             guard let container = modelContainer else { return nil }
             let context = ModelContext(container)
@@ -180,10 +179,10 @@ final class CacheService: @unchecked Sendable {
         }
     }
 
-    func cacheAudio(_ data: Data, for word: String) {
-        let key = normalizeKey(word)
-        queue.sync {
-            guard let container = modelContainer else { return }
+    func cacheAudio(_ data: Data, for key: String) {
+        // fire-and-forget：音频体积大（数百 KB），不让写入阻塞调用线程
+        queue.async {
+            guard let container = self.modelContainer else { return }
             let context = ModelContext(container)
             let descriptor = FetchDescriptor<TTSCache>(
                 predicate: #Predicate { $0.word == key }
@@ -219,7 +218,7 @@ final class CacheService: @unchecked Sendable {
         }
     }
 
-    /// 返回 (单词翻译条目数, 音频条目数, 句子翻译条目数)
+    /// 返回 (单词翻译条目数, 音频缓存条目数, 句子翻译条目数)
     func cacheCounts() -> (translation: Int, tts: Int, sentence: Int) {
         queue.sync {
             guard let container = modelContainer else { return (0, 0, 0) }
@@ -231,9 +230,10 @@ final class CacheService: @unchecked Sendable {
             let sentenceDesc = FetchDescriptor<TranslationCache>(
                 predicate: #Predicate { $0.word.starts(with: prefix) }
             )
+            let ttsDesc = FetchDescriptor<TTSCache>()
             let tCount = (try? context.fetchCount(wordDesc)) ?? 0
             let sCount = (try? context.fetchCount(sentenceDesc)) ?? 0
-            let aCount = (try? context.fetchCount(FetchDescriptor<TTSCache>())) ?? 0
+            let aCount = (try? context.fetchCount(ttsDesc)) ?? 0
             return (tCount, aCount, sCount)
         }
     }

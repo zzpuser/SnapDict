@@ -19,6 +19,7 @@ DerivedData/
 
 # Claude Code
 .claude/
+.superpowers/
 
 # Docs
 docs/

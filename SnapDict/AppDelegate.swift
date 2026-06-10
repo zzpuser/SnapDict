@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         migrateUserDefaultsIfNeeded()
+        resetLegacyPronunciationDefaultsIfNeeded()
         setupStatusItem()
 
         // Register hot key
@@ -58,11 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Constants.UserDefaultsKey.hotKeyModifiers,
             Constants.UserDefaultsKey.enableMnemonic,
             Constants.UserDefaultsKey.showExamples,
-            Constants.UserDefaultsKey.ttsEngine,
-            Constants.UserDefaultsKey.byteDanceTTSAppId,
-            Constants.UserDefaultsKey.byteDanceTTSAPIKey,
-            Constants.UserDefaultsKey.ttsFallbackToSystem,
-            Constants.UserDefaultsKey.byteDanceTTSVoice,
         ]
 
         for key in keysToMigrate {
@@ -73,6 +69,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         UserDefaults.standard.set(true, forKey: migrationKey)
+    }
+
+    private func resetLegacyPronunciationDefaultsIfNeeded() {
+        let cleanupKey = "didResetLegacyPronunciationDefaults"
+        guard !UserDefaults.standard.bool(forKey: cleanupKey) else { return }
+
+        let legacyKeys = [
+            "ttsEngine",
+            "byteDanceTTSAppId",
+            "byteDanceTTSAPIKey",
+            "ttsFallbackToSystem",
+            "byteDanceTTSVoice",
+            "ttsVolume",
+        ]
+
+        for key in legacyKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
+        UserDefaults.standard.set(true, forKey: cleanupKey)
     }
 
     // MARK: - Status Item

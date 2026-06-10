@@ -44,6 +44,7 @@ struct UnifiedPanelView: View {
 
     /// 切换 Tab：先预扩窗口（避免内容被压缩闪动），再切换内容
     private func switchTab(to tab: PanelTab) {
+        TTSManager.shared.stop()
         PanelManager.shared.preExpandIfNeeded(for: tab)
         selectedTab = tab
     }
