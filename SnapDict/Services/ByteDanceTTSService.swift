@@ -38,8 +38,6 @@ final class ByteDanceTTSService: Sendable {
 
         let speaker = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.byteDanceTTSVoice)
             ?? Constants.API.byteDanceTTSDefaultVoice
-        let volume = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsVolume) as? Int
-            ?? Constants.Defaults.ttsVolume
 
         let cacheKey = "\(speaker):\(text)"
 
@@ -53,8 +51,7 @@ final class ByteDanceTTSService: Sendable {
             text: text,
             appId: appId,
             accessKey: accessKey,
-            speaker: speaker,
-            volume: volume
+            speaker: speaker
         )
 
         // 缓存结果
@@ -69,8 +66,7 @@ final class ByteDanceTTSService: Sendable {
         text: String,
         appId: String,
         accessKey: String,
-        speaker: String,
-        volume: Int
+        speaker: String
     ) async throws -> Data {
         let url = URL(string: Constants.API.byteDanceTTSEndpoint)!
         var request = URLRequest(url: url, timeoutInterval: 30)
@@ -90,7 +86,6 @@ final class ByteDanceTTSService: Sendable {
                 "audio_params": [
                     "format": "mp3",
                     "sample_rate": 24000,
-                    "loudness_rate": volume,
                 ],
             ],
         ]

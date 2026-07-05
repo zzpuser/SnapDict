@@ -350,8 +350,8 @@ struct PanelSettingsView: View {
                                     get: { Double(ttsVolume) },
                                     set: { ttsVolume = Int($0) }
                                 ),
-                                in: 10...100,
-                                step: 5
+                                in: 10...Double(Constants.Defaults.ttsVolumeMax),
+                                step: 10
                             )
                             .onChange(of: ttsVolume) { _, newValue in
                                 UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.ttsVolume)

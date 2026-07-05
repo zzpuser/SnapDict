@@ -161,6 +161,7 @@ enum Constants {
         static let pushRandomMode: PushRandomMode = .minCount
         static let ttsFallbackToSystem = true
         static let ttsVolume = 100
+        static let ttsVolumeMax = 500
     }
 
     enum Notification {

@@ -162,14 +162,67 @@ final class TTSManager: NSObject, AVAudioPlayerDelegate {
     /// AVAudioPlayer 线程安全；MP3 解码、缓冲预载、音频硬件启动（prepareToPlay 内的
     /// coreaudiod 同步 IPC，蓝牙设备可达秒级）均不占用 main actor。
     private nonisolated static func makePreparedPlayer(data: Data) async throws -> sending AVAudioPlayer {
-        let player = try AVAudioPlayer(data: data, fileTypeHint: AVFileType.mp3.rawValue)
         let volume = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.ttsVolume) as? Int
             ?? Constants.Defaults.ttsVolume
-        player.volume = Float(min(max(volume, 0), 100)) / 100
+        let clamped = min(max(volume, 0), Constants.Defaults.ttsVolumeMax)
+
+        let player: AVAudioPlayer
+        if clamped > 100 {
+            // AVAudioPlayer.volume 上限为 1.0，超过 100% 只能预处理样本实现增益
+            let amplified = try amplifiedAudioData(from: data, gain: Float(clamped) / 100)
+            player = try AVAudioPlayer(data: amplified, fileTypeHint: AVFileType.caf.rawValue)
+            player.volume = 1
+        } else {
+            player = try AVAudioPlayer(data: data, fileTypeHint: AVFileType.mp3.rawValue)
+            player.volume = Float(clamped) / 100
+        }
         guard player.prepareToPlay() else {
             throw TTSPlaybackError.playbackFailed
         }
         return player
+    }
+
+    /// 音量放大：解码 MP3 → PCM 样本乘增益（clamp 到 ±1 防爆音削波失真过重）→ 重编码为 CAF。
+    /// AVAudioFile 只接受文件 URL，需经临时文件中转。
+    private nonisolated static func amplifiedAudioData(from data: Data, gain: Float) throws -> Data {
+        let tempDir = FileManager.default.temporaryDirectory
+        let inputURL = tempDir.appendingPathComponent("snapdict-tts-\(UUID().uuidString).mp3")
+        let outputURL = tempDir.appendingPathComponent("snapdict-tts-\(UUID().uuidString).caf")
+        defer {
+            try? FileManager.default.removeItem(at: inputURL)
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        try data.write(to: inputURL)
+
+        let inputFile = try AVAudioFile(forReading: inputURL)
+        let format = inputFile.processingFormat
+        let frameCount = AVAudioFrameCount(inputFile.length)
+        guard frameCount > 0,
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+            throw TTSPlaybackError.playbackFailed
+        }
+        try inputFile.read(into: buffer)
+        guard let channels = buffer.floatChannelData else {
+            throw TTSPlaybackError.playbackFailed
+        }
+        for channel in 0..<Int(format.channelCount) {
+            let samples = channels[channel]
+            for i in 0..<Int(buffer.frameLength) {
+                samples[i] = max(-1, min(1, samples[i] * gain))
+            }
+        }
+
+        // AVAudioFile 在释放时才完成写入，独立作用域确保读取前已落盘
+        do {
+            let outputFile = try AVAudioFile(
+                forWriting: outputURL,
+                settings: format.settings,
+                commonFormat: .pcmFormatFloat32,
+                interleaved: false
+            )
+            try outputFile.write(from: buffer)
+        }
+        return try Data(contentsOf: outputURL)
     }
 
     /// 绑定 delegate 并启动播放（player 已 prepare，play() 开销极小）
