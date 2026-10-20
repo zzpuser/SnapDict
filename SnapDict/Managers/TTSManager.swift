@@ -87,7 +87,8 @@ final class TTSManager: NSObject, AVAudioPlayerDelegate {
     private func speakWithSystem(_ word: String, token: UUID) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/say")
-        process.arguments = [word]
+        // "--" 结束选项解析，否则 "-able" 等词缀会被 say 当作命令行选项
+        process.arguments = ["--", word]
         // 静默标准输出和错误输出
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice

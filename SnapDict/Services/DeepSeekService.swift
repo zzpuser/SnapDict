@@ -26,16 +26,19 @@ final class DeepSeekService: Sendable {
                     let isPhrase = text.trimmingCharacters(in: .whitespacesAndNewlines).contains(" ")
 
                     // 缓存检查：只有所有需要的字段都有时才命中
-                    if !skipCache, let cached = CacheService.shared.getCachedTranslation(for: normalizedText) {
+                    // phonetic 允许为空（prompt 允许无音标时返回 ""），否则无音标的词永远无法命中缓存
+                    // 禁止纠正模式下不使用拼写纠正别名条目（originalInput != nil）
+                    if !skipCache, let cached = CacheService.shared.getCachedTranslation(for: normalizedText),
+                       !(forceNoAutoCorrect && cached.originalInput != nil) {
                         let mnemonicReady = !enableMnemonic || isPhrase || cached.etymology != nil
                         let examplesReady = !showExamples || !cached.examples.isEmpty
-                        if !cached.word.isEmpty && !cached.phonetic.isEmpty && !cached.translation.isEmpty
+                        if !cached.word.isEmpty && !cached.translation.isEmpty
                             && mnemonicReady && examplesReady {
                             continuation.yield(PartialWordResult(
                                 word: cached.word,
                                 phonetic: cached.phonetic,
                                 translation: cached.translation,
-                                originalInput: nil,
+                                originalInput: cached.originalInput,
                                 etymology: cached.etymology,
                                 association: cached.association,
                                 examples: cached.examples,
@@ -121,6 +124,15 @@ final class DeepSeekService: Sendable {
                             association: lastPartial.association
                         )
                         CacheService.shared.cacheTranslation(fullResult)
+
+                        // 拼写纠正时额外以原始输入为 key 存一份别名（带 originalInput 以显示纠正提示），
+                        // 否则同一错拼每次查询都无法命中缓存（查询 key 是输入，正式条目 key 是纠正后的词）
+                        if let originalInput = lastPartial.originalInput,
+                           originalInput.lowercased() != word.lowercased() {
+                            var aliasResult = fullResult
+                            aliasResult.originalInput = originalInput
+                            CacheService.shared.cacheTranslation(aliasResult, for: originalInput)
+                        }
                     }
                     continuation.finish()
                 } catch is CancellationError {

@@ -1271,9 +1271,17 @@ struct PanelSettingsView: View {
             let keyCode = event.keyCode
             let carbonMods = carbonModifiers(from: event.modifierFlags)
 
-            // 至少需要一个修饰键（或者允许无修饰键的特殊键）
-            let hasModifier = !event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty
-            if hasModifier || keyCode == UInt32(kVK_Space) {
+            let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            // 单独按 Esc 取消录制
+            if keyCode == UInt16(kVK_Escape) && modifiers.isEmpty {
+                self.stopRecording()
+                return nil
+            }
+
+            // 全局热键会吞掉系统内所有该组合的按键：无修饰键（如空格）或仅 Shift（如大写字母）
+            // 会让正常打字失效，因此至少需要 ⌘ / ⌥ / ⌃ 之一
+            let hasModifier = !modifiers.intersection([.command, .option, .control]).isEmpty
+            if hasModifier {
                 self.applyShortcut(keyCode: UInt32(keyCode), carbonModifiers: carbonMods, displayFlags: event.modifierFlags)
             }
             return nil // 消耗事件，防止触发其他操作

@@ -32,8 +32,9 @@ final class CacheService: @unchecked Sendable {
         }
     }
 
-    func cacheTranslation(_ result: TranslationResult) {
-        let key = normalizeKey(result.word)
+    /// 缓存单词翻译，key 默认取 result.word；拼写纠正时可传入原始输入作为别名 key
+    func cacheTranslation(_ result: TranslationResult, for word: String? = nil) {
+        let key = normalizeKey(word ?? result.word)
         guard let jsonData = try? JSONEncoder().encode(result),
               let jsonString = String(data: jsonData, encoding: .utf8) else { return }
 

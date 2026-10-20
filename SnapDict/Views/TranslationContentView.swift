@@ -36,6 +36,9 @@ struct TranslationContentView: View {
 
     @State private var contentHeight: CGFloat = 0
 
+    /// 程序化写入的 query 值：onChange(of: query) 遇到它时跳过防抖翻译（调用方已直接发起翻译）
+    @State private var programmaticQuery: String?
+
     @FocusState private var isInputFocused: Bool
 
     // 判断是否有内容显示（需要展开窗口）
@@ -53,11 +56,16 @@ struct TranslationContentView: View {
         return (isMnemonicLoading && !hasMnemonicData) || (isExamplesLoading && !hasExamples)
     }
 
+    /// 短语（含空格）不提供助记
+    private var isPhraseQuery: Bool {
+        query.trimmingCharacters(in: .whitespacesAndNewlines).contains(" ")
+    }
+
     /// 骨架屏预估内容高度，用于在 onGeometryChange 触发前立即展开面板
     private var estimatedSkeletonContentHeight: CGFloat {
         var h: CGFloat = 106
-        if UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.enableMnemonic) as? Bool
-            ?? Constants.Defaults.enableMnemonic { h += 99 }
+        if (UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.enableMnemonic) as? Bool
+            ?? Constants.Defaults.enableMnemonic) && !isPhraseQuery { h += 99 }
         if UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.showExamples) as? Bool
             ?? Constants.Defaults.showExamples { h += 98 }
         return h
@@ -80,6 +88,10 @@ struct TranslationContentView: View {
                         performTranslation()
                     }
                     .onChange(of: query) { _, newValue in
+                        if let pending = programmaticQuery {
+                            programmaticQuery = nil
+                            if pending == newValue { return }
+                        }
                         if newValue.isEmpty {
                             resetState()
                         } else {
@@ -174,8 +186,9 @@ struct TranslationContentView: View {
         }
         .onChange(of: initialQuery) { _, newValue in
             if let text = newValue, !text.isEmpty {
-                query = text
+                setQueryProgrammatically(text)
                 initialQuery = nil
+                debounceTask?.cancel()
                 performTranslation()
             }
         }
@@ -256,7 +269,7 @@ struct TranslationContentView: View {
                 skeletonLine(width: 280)
                 skeletonLine(width: 180)
 
-                if enableMnemonic {
+                if enableMnemonic && !isPhraseQuery {
                     Divider()
                         .padding(.vertical, 4)
 
@@ -372,9 +385,8 @@ struct TranslationContentView: View {
         // Etymology（逐字流入）
         let enableMnemonic = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.enableMnemonic) as? Bool
             ?? Constants.Defaults.enableMnemonic
-        let isPhrase = query.trimmingCharacters(in: .whitespacesAndNewlines).contains(" ")
 
-        if enableMnemonic && !isPhrase {
+        if enableMnemonic && !isPhraseQuery {
             if partial.etymology != nil || partial.association != nil {
                 Divider()
                     .padding(.vertical, 4)
@@ -804,8 +816,10 @@ struct TranslationContentView: View {
         let enableMnemonic = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.enableMnemonic) as? Bool
             ?? Constants.Defaults.enableMnemonic
         let hasMnemonicData = result.etymology != nil || result.association != nil
+        // 短语不提供助记（fetchMnemonic 对短语直接返回 nil），不显示助记区
+        let isPhrase = result.word.contains(" ")
 
-        if enableMnemonic {
+        if enableMnemonic && !isPhrase {
             Divider()
                 .padding(.vertical, 4)
 
@@ -992,34 +1006,18 @@ struct TranslationContentView: View {
     }
 
     private func queryWithOriginalInput(_ text: String) {
-        // 1. 立即停止当前所有任务
         debounceTask?.cancel()
-        translationTask?.cancel()
-        mnemonicTask?.cancel()
-        examplesTask?.cancel()
+        setQueryProgrammatically(text)
+        // performTranslation 会取消在途任务并重置为骨架屏状态
+        performTranslation(forceNoAutoCorrect: true)
+    }
 
-        // 2. 重置为骨架屏状态
-        result = nil
-        partialWord = nil
-        partialSentence = nil
-        sentenceResult = nil
-        errorMessage = nil
-        isMnemonicLoading = false
-        isExamplesLoading = false
-        mnemonicError = nil
-        examplesError = nil
-        isLoading = true
-        isSaved = false
-
-        // 3. 更新输入框文字（会触发 onChange → debounceAutoTranslate）
+    /// 程序化更新输入框文字，不触发 onChange 的防抖翻译，由调用方直接发起翻译。
+    /// 否则 onChange 会取消调用方刚发起的请求，并在 300ms 后重复请求一次。
+    private func setQueryProgrammatically(_ text: String) {
+        guard query != text else { return }
+        programmaticQuery = text
         query = text
-
-        // 4. 在下一个 run loop 执行，确保在 onChange 的 debounce 之后
-        //    取消 debounce 创建的任务，启动 forceNoAutoCorrect 翻译
-        Task { @MainActor in
-            debounceTask?.cancel()
-            performTranslation(forceNoAutoCorrect: true)
-        }
     }
 
     private func toggleSavePartialWord(_ partial: PartialWordResult) {

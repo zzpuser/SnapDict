@@ -10,11 +10,8 @@ final class WordPushScheduler {
     var lastError: String?
 
     private var timer: Timer?
-    private var cachedDeviceId: String?
 
-    private init() {
-        cachedDeviceId = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.cachedDeviceId)
-    }
+    private init() {}
 
     func start() {
         guard !isRunning else { return }
@@ -90,7 +87,9 @@ final class WordPushScheduler {
     }
 
     private func resolveDeviceId() async throws -> String {
-        if let cached = cachedDeviceId, !cached.isEmpty {
+        // 每次从 UserDefaults 读取：设置页切换/刷新设备只写 UserDefaults，不能缓存在内存
+        if let cached = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.cachedDeviceId),
+           !cached.isEmpty {
             return cached
         }
 
@@ -99,7 +98,6 @@ final class WordPushScheduler {
             throw DotError.requestFailed
         }
 
-        cachedDeviceId = first.id
         UserDefaults.standard.set(first.id, forKey: Constants.UserDefaultsKey.cachedDeviceId)
         return first.id
     }
