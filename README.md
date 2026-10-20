@@ -34,7 +34,9 @@
 
 1. 从 [Releases](https://github.com/zzpuser/SnapDict/releases/latest) 下载最新的 DMG 文件
 2. 打开 DMG，将 SnapDict 拖入 Applications 文件夹
-3. 终端执行 `sudo xattr -r -d com.apple.quarantine /Applications/SnapDict.app`
+3. 首次打开时 macOS 会提示无法验证开发者（应用未经 Apple 公证），任选一种方式放行：
+   - 打开「系统设置 → 隐私与安全性」，在底部点击「仍要打开」
+   - 或在终端执行 `sudo xattr -r -d com.apple.quarantine /Applications/SnapDict.app`
 4. 打开 SnapDict
 
 ## 快速开始

@@ -44,8 +44,18 @@ jobs:
             -derivedDataPath build \
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
+
+      # ad-hoc 签名：不能关掉 CODE_SIGNING_ALLOWED，否则只剩链接器签名（无资源封装），
+      # 下载后带 quarantine 会被 Gatekeeper 判定为"已损坏"
+      # CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO 避免发布包带上调试用的 get-task-allow
+      - name: Verify code signature
+        run: |
+          APP_PATH="build/Build/Products/Release/SnapDict.app"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          codesign -dvvv "$APP_PATH"
 
       - name: Install create-dmg
         run: brew install create-dmg
@@ -113,7 +123,9 @@ jobs:
             ## 安装方式
             1. 下载 DMG 文件
             2. 打开 DMG，将 SnapDict 拖入 Applications 文件夹
-            3. 终端执行 `sudo xattr -r -d com.apple.quarantine /Applications/SnapDict.app`
+            3. 首次打开时 macOS 会提示无法验证开发者（应用未经 Apple 公证），任选一种方式放行：
+               - 打开「系统设置 → 隐私与安全性」，在底部点击「仍要打开」
+               - 或在终端执行 `sudo xattr -r -d com.apple.quarantine /Applications/SnapDict.app`
             4. 打开 SnapDict
           files: ${{ env.dmg_name }}
           draft: false
