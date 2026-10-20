@@ -85,8 +85,16 @@ jobs:
         id: notes
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          # 从 README.md 提取对应版本的更新内容（### vX.Y.Z 到下一个 ### 之间的内容）
-          NOTES=$(awk "/^### ${TAG}$/,/^### v/" README.md | head -n -1 | tail -n +2)
+          # 从 README.md 提取对应版本的更新内容：### vX.Y.Z 之后，到下一个 #/##/### 标题之前
+          # 只用 POSIX awk，不依赖 GNU head（macOS runner 的 BSD head 不支持负数行数）
+          NOTES=$(awk -v tag="### ${TAG}" '
+            $0 == tag { f = 1; next }
+            f && /^(#|##|###) / { exit }
+            f && (started || NF) { started = 1; print }
+          ' README.md)
+          if [ -z "$NOTES" ]; then
+            echo "::warning::README.md 中未找到 ### ${TAG} 的更新日志"
+          fi
           {
             echo "body<<EOF"
             echo "$NOTES"
@@ -94,7 +102,7 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: SnapDict ${{ steps.version.outputs.version }}
