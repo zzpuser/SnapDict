@@ -35,6 +35,8 @@ jobs:
       - name: Resolve packages
         run: xcodebuild -resolvePackageDependencies -scheme SnapDict -project SnapDict.xcodeproj
 
+      # generic/platform=macOS + 显式 ARCHS：产出 arm64 + x86_64 通用二进制。
+      # 用 'platform=macOS' 只会编译 runner 本机架构（arm64），Intel Mac 无法运行
       - name: Build
         run: |
           xcodebuild build \
@@ -42,7 +44,9 @@ jobs:
             -project SnapDict.xcodeproj \
             -configuration Release \
             -derivedDataPath build \
-            -destination 'platform=macOS' \
+            -destination 'generic/platform=macOS' \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="" \
@@ -56,6 +60,14 @@ jobs:
           APP_PATH="build/Build/Products/Release/SnapDict.app"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           codesign -dvvv "$APP_PATH"
+          ARCHS=$(lipo -archs "$APP_PATH/Contents/MacOS/SnapDict")
+          echo "Architectures: $ARCHS"
+          for arch in arm64 x86_64; do
+            case " $ARCHS " in
+              *" $arch "*) ;;
+              *) echo "::error::SnapDict 二进制缺少 $arch 架构（实际: $ARCHS）"; exit 1 ;;
+            esac
+          done
 
       - name: Install create-dmg
         run: brew install create-dmg
