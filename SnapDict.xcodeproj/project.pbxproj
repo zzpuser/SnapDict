@@ -30,6 +30,7 @@
 		72E3D69580D7C0A66A9635E4 /* WordCardRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB31BABC4AA77535E95EA0F2 /* WordCardRenderer.swift */; };
 		734097A4ABB033C89E07345B /* PanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC24D800B3D6627EEEA620AD /* PanelManager.swift */; };
 		75CFB7553D471667A470BACD /* TranslationCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AE3856D11F007BDE4D15CF /* TranslationCache.swift */; };
+		838A27F7B81084564A7B7664 /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 708DA7B82FD0B07E9288E140 /* LaunchAtLogin.swift */; };
 		92CE3C7355C616ECA61EE43C /* TTSManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B409B3E3B74593D88A2FBB91 /* TTSManager.swift */; };
 		9599AD5D4133DB7732639567 /* TranslationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6135220CCDC4F0D0642313DB /* TranslationPanel.swift */; };
 		960753BF996C1E0E36AD3201 /* SelectedTextReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E79642B8AF9C7EBD30DE10DF /* SelectedTextReader.swift */; };
@@ -60,6 +61,7 @@
 		62566692D40C75E394760BEE /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		6343E5CFC6B1BB29C20DDDD8 /* DotScreenService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DotScreenService.swift; sourceTree = "<group>"; };
 		6FAA2EE546D77CC79AD4749B /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		708DA7B82FD0B07E9288E140 /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
 		89FAC34BCBF8C39EB01F3781 /* WordBookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordBookView.swift; sourceTree = "<group>"; };
 		8E98A6F746E6B76F170CB3BD /* WordBookManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordBookManager.swift; sourceTree = "<group>"; };
 		9870533FB579328650A06CDE /* SnapDictApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapDictApp.swift; sourceTree = "<group>"; };
@@ -101,6 +103,7 @@
 			children = (
 				62566692D40C75E394760BEE /* Constants.swift */,
 				EFE916BF71EE9DAAC6DE6A6B /* InputClassifier.swift */,
+				708DA7B82FD0B07E9288E140 /* LaunchAtLogin.swift */,
 				E79642B8AF9C7EBD30DE10DF /* SelectedTextReader.swift */,
 			);
 			path = Utilities;
@@ -290,6 +293,7 @@
 				DDF1D15832A4DE437198310E /* DotScreenService.swift in Sources */,
 				D7AC6B61C89FAF6EB4F14530 /* HotKeyManager.swift in Sources */,
 				5EC934832863C48C67F08791 /* InputClassifier.swift in Sources */,
+				838A27F7B81084564A7B7664 /* LaunchAtLogin.swift in Sources */,
 				734097A4ABB033C89E07345B /* PanelManager.swift in Sources */,
 				492DD177029532AD5034A835 /* PanelSettingsView.swift in Sources */,
 				6AE1D487D3FF7F611AB4CD65 /* PanelWordBookView.swift in Sources */,
@@ -332,7 +336,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.1.2;
+				MARKETING_VERSION = 2.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zzp.SnapDict;
 				PRODUCT_NAME = SnapDict;
 				SDKROOT = macosx;
@@ -356,7 +360,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.1.2;
+				MARKETING_VERSION = 2.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zzp.SnapDict;
 				PRODUCT_NAME = SnapDict;
 				SDKROOT = macosx;

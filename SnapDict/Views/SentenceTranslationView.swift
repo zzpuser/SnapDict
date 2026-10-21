@@ -29,7 +29,7 @@ struct SentenceTranslationView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "text.book.closed")
                             .font(.system(size: 12))
-                        Text(inputType == .chinese ? "用法说明" : "语法解析")
+                        Text(inputType.analysisTitle)
                             .font(.system(size: 13))
                     }
                     .foregroundStyle(.secondary)

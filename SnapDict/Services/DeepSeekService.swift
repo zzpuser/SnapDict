@@ -157,7 +157,11 @@ final class DeepSeekService: Sendable {
             let task = Task.detached { [self] in
                 do {
                     let normalizedText = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                    let cacheKey = "s:" + normalizedText
+                    // 中英混合、多行输入的 prompt 有调整，使用独立 key，避免命中旧 prompt 缓存的错误结果
+                    var cacheKey = "s:"
+                    if inputType == .mixed { cacheKey += "m:" }
+                    if text.contains(where: \.isNewline) { cacheKey += "n:" }
+                    cacheKey += normalizedText
 
                     if !skipCache, let cached = CacheService.shared.getCachedSentenceTranslation(for: cacheKey) {
                         continuation.yield(PartialSentenceResult(
@@ -352,6 +356,10 @@ final class DeepSeekService: Sendable {
     private func buildSentencePrompt(text: String, inputType: InputType) -> String {
         let showAnalysis = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.showAnalysis) as? Bool
             ?? Constants.Defaults.showAnalysis
+        // 多行输入时要求保留换行，否则模型会把多段合并成一段译文
+        let lineBreakRule = text.contains(where: \.isNewline)
+            ? "translation 必须保留原文的分段与换行：原文每处换行（含空行）都在译文对应位置用 \\n 保留，逐段对应翻译。\n"
+            : ""
 
         switch inputType {
         case .sentence:
@@ -359,7 +367,7 @@ final class DeepSeekService: Sendable {
                 return """
                 你是一个专业的英语翻译助手。请翻译以下英文短句/段落，只返回 JSON 格式：
                 {"translation": "中文翻译（自然流畅）", "analysis": "简要语法/用法解析（2-3句话，点出关键语法点或地道用法）"}
-
+                \(lineBreakRule)
                 只返回 JSON，不要返回其他内容。
 
                 输入：\(text)
@@ -368,7 +376,7 @@ final class DeepSeekService: Sendable {
                 return """
                 你是一个专业的英语翻译助手。请翻译以下英文短句/段落，只返回 JSON 格式：
                 {"translation": "中文翻译（自然流畅）"}
-
+                \(lineBreakRule)
                 只返回 JSON，不要返回其他内容。
 
                 输入：\(text)
@@ -379,7 +387,7 @@ final class DeepSeekService: Sendable {
                 return """
                 你是一个专业的英语翻译助手。请将以下中文翻译为英文，只返回 JSON 格式：
                 {"translation": "英文翻译（自然地道）", "analysis": "简要用法说明（解释翻译选择或提供替代表达）"}
-
+                \(lineBreakRule)
                 只返回 JSON，不要返回其他内容。
 
                 输入：\(text)
@@ -388,7 +396,27 @@ final class DeepSeekService: Sendable {
                 return """
                 你是一个专业的英语翻译助手。请将以下中文翻译为英文，只返回 JSON 格式：
                 {"translation": "英文翻译（自然地道）"}
+                \(lineBreakRule)
+                只返回 JSON，不要返回其他内容。
 
+                输入：\(text)
+                """
+            }
+        case .mixed:
+            if showAnalysis {
+                return """
+                你是一个专业的中英翻译助手。输入是中英混合文本，请先判断主体语言（以句子结构和大部分内容所用的语言为准，夹杂的人名、地名、术语、代码不算）：主体是英文则整体翻译为中文，主体是中文则整体翻译为英文。只返回 JSON 格式：
+                {"translation": "译文（自然流畅）", "analysis": "简要语法/用法解析（2-3句话）"}
+                \(lineBreakRule)
+                只返回 JSON，不要返回其他内容。
+
+                输入：\(text)
+                """
+            } else {
+                return """
+                你是一个专业的中英翻译助手。输入是中英混合文本，请先判断主体语言（以句子结构和大部分内容所用的语言为准，夹杂的人名、地名、术语、代码不算）：主体是英文则整体翻译为中文，主体是中文则整体翻译为英文。只返回 JSON 格式：
+                {"translation": "译文（自然流畅）"}
+                \(lineBreakRule)
                 只返回 JSON，不要返回其他内容。
 
                 输入：\(text)

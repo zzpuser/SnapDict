@@ -32,6 +32,15 @@ private struct ContentHeightKey: PreferenceKey {
     }
 }
 
+private extension View {
+    /// 设置卡片内单行的统一内边距
+    func settingsRow() -> some View {
+        frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+    }
+}
+
 struct PanelSettingsView: View {
     let isActive: Bool
     var onHeightChange: ((CGFloat) -> Void)?
@@ -80,6 +89,10 @@ struct PanelSettingsView: View {
     @State private var autoFetchSelectedText: Bool = Constants.Defaults.autoFetchSelectedText
     @State private var accessibilityGranted: Bool = false
     @State private var accessibilityPollTimer: Timer?
+    @State private var launchAtLogin: Bool = false
+    @State private var launchAtLoginNeedsApproval: Bool = false
+    @State private var launchAtLoginError: String?
+    @State private var showMenuBarIcon: Bool = Constants.Defaults.showMenuBarIcon
     @State private var eventMonitor: Any?
 
     // TTS settings
@@ -113,595 +126,12 @@ struct PanelSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // MARK: 通用
-                sectionHeader("通用")
-
-                VStack(spacing: 0) {
-                    HStack {
-                        Text("唤醒快捷键")
-                            .font(.system(size: 14))
-                        Button(isRecordingShortcut ? "按下快捷键..." : shortcutText) {
-                            toggleRecording()
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    Text("默认 \(Self.defaultShortcutText)，修改后立即生效")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 10)
-                }
-                .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal, 14)
-
-                // MARK: 查词
-                sectionHeader("查词")
-
-                VStack(spacing: 0) {
-                    apiKeyRow(
-                        title: "DeepSeek",
-                        hint: "用于翻译功能，从 platform.deepseek.com 获取",
-                        key: $deepSeekKey,
-                        savedKey: $savedDeepSeekKey,
-                        saveState: $deepSeekSaveState,
-                        testState: deepSeekTestState,
-                        onSave: {
-                            saveKeyWithTest(
-                                value: deepSeekKey,
-                                defaultsKey: Constants.UserDefaultsKey.deepSeekAPIKey,
-                                savedKey: $savedDeepSeekKey,
-                                saveState: $deepSeekSaveState,
-                                setState: { deepSeekTestState = $0 },
-                                action: { _ = try await DeepSeekService.shared.testAPI() }
-                            )
-                        },
-                        onTest: { testDeepSeek() }
-                    )
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    Divider().padding(.leading, 14)
-
-                    HStack {
-                        Text("显示助记")
-                        Spacer()
-                        Toggle("", isOn: $enableMnemonic)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                            .onChange(of: enableMnemonic) { _, newValue in
-                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.enableMnemonic)
-                            }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-//                    Text("开启后显示词根词缀拆解和联想记忆")
-//                        .font(.system(size: 11))
-//                        .foregroundStyle(.tertiary)
-//                        .frame(maxWidth: .infinity, alignment: .leading)
-//                        .padding(.horizontal, 14)
-//                        .padding(.bottom, 10)
-
-                    Divider().padding(.leading, 14)
-
-                    HStack {
-                        Text("显示例句")
-                        Spacer()
-                        Toggle("", isOn: $showExamples)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                            .onChange(of: showExamples) { _, newValue in
-                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.showExamples)
-                            }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    Divider().padding(.leading, 14)
-
-                    HStack {
-                        Text("显示语法解析")
-                        Spacer()
-                        Toggle("", isOn: $showAnalysis)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                            .onChange(of: showAnalysis) { _, newValue in
-                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.showAnalysis)
-                            }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    Divider().padding(.leading, 14)
-
-                    VStack(spacing: 0) {
-                        HStack {
-                            Text("自动获取选中文字")
-                            Spacer()
-                            Toggle("", isOn: $autoFetchSelectedText)
-                                .toggleStyle(.switch)
-                                .labelsHidden()
-                                .onChange(of: autoFetchSelectedText) { _, newValue in
-                                    UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.autoFetchSelectedText)
-                                    if newValue {
-                                        SelectedTextReader.requestAccessibility()
-                                        checkAccessibility()
-                                        startAccessibilityPolling()
-                                    } else {
-                                        stopAccessibilityPolling()
-                                    }
-                                }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-
-                        if autoFetchSelectedText {
-                            HStack(spacing: 4) {
-                                if accessibilityGranted {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
-                                    Text("辅助功能权限已授予")
-                                } else {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .foregroundStyle(.orange)
-                                    Text("需要辅助功能权限")
-                                    Spacer()
-                                    Button("前往设置") {
-                                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.mini)
-                                }
-                            }
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 10)
-                        }
-                    }
-
-                    Divider().padding(.leading, 14)
-
-                    HStack {
-                        Text("失去焦点自动关闭")
-                        Spacer()
-                        Toggle("", isOn: $hideOnFocusLost)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                            .onChange(of: hideOnFocusLost) { _, newValue in
-                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.hideOnFocusLost)
-                            }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                }
-                .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal, 14)
-
-                // MARK: 发音
-                sectionHeader("发音")
-
-                VStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("发音引擎")
-                            .font(.system(size: 14))
-                        Picker("发音引擎", selection: $ttsEngine) {
-                            ForEach(Constants.TTSEngine.allCases, id: \.self) { engine in
-                                Text(engine.displayName).tag(engine)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
-                        .onChange(of: ttsEngine) { _, newValue in
-                            UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.ttsEngine)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    if ttsEngine == .byteDance {
-                        Divider().padding(.leading, 14)
-
-                        ttsApiKeyRow()
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-
-                        Divider().padding(.leading, 14)
-
-                        HStack {
-                            Text("音色")
-                                .font(.system(size: 14))
-                            Picker("", selection: $ttsVoice) {
-                                ForEach(Constants.API.byteDanceTTSVoices, id: \.id) { voice in
-                                    Text(voice.name).tag(voice.id)
-                                }
-                            }
-                            .labelsHidden()
-                            .fixedSize()
-                            .onChange(of: ttsVoice) { _, newValue in
-                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.byteDanceTTSVoice)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-
-                        Divider().padding(.leading, 14)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("音量")
-                                    .font(.system(size: 14))
-                                Spacer()
-                                Text("\(ttsVolume)%")
-                                    .font(.system(size: 14, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Slider(
-                                value: Binding(
-                                    get: { Double(ttsVolume) },
-                                    set: { ttsVolume = Int($0) }
-                                ),
-                                in: 10...Double(Constants.Defaults.ttsVolumeMax),
-                                step: 10
-                            )
-                            .onChange(of: ttsVolume) { _, newValue in
-                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.ttsVolume)
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-
-                        Divider().padding(.leading, 14)
-
-                        HStack {
-                            Text("合成失败时降级为系统发音")
-                            Spacer()
-                            Toggle("", isOn: $ttsFallbackToSystem)
-                                .toggleStyle(.switch)
-                                .labelsHidden()
-                                .onChange(of: ttsFallbackToSystem) { _, newValue in
-                                    UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.ttsFallbackToSystem)
-                                }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                    }
-                }
-                .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal, 14)
-
-                // MARK: 推送
-                sectionHeader("推送")
-
-                VStack(spacing: 0) {
-                    HStack {
-                        Text("墨水屏推送")
-                        Spacer()
-                        Toggle("", isOn: $pushEnabled)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                            .onChange(of: pushEnabled) { _, newValue in
-                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.pushEnabled)
-                                if newValue {
-                                    WordPushScheduler.shared.start()
-                                } else {
-                                    WordPushScheduler.shared.stop()
-                                }
-                            }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    if pushEnabled {
-                    Divider().padding(.leading, 14)
-
-                    // API Key 行
-                    dotApiKeyRow()
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-
-                    Divider().padding(.leading, 14)
-
-                    // 连接状态指示器
-                    dotConnectionIndicator()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-
-                    // 设备选择（仅已连接时显示）
-                    if case .connected = connectionState {
-                        Divider().padding(.leading, 14)
-
-                        HStack {
-                            Text("设备")
-                                .font(.system(size: 14))
-                            if connectedDevices.count > 1 {
-                                Picker("", selection: $selectedDeviceId) {
-                                    ForEach(connectedDevices) { device in
-                                        Text(device.displayName).tag(device.id)
-                                    }
-                                }
-                                .labelsHidden()
-                                .fixedSize()
-                                .onChange(of: selectedDeviceId) { _, newValue in
-                                    UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.cachedDeviceId)
-                                    loadTasks()
-                                }
-                            } else if let device = connectedDevices.first {
-                                Text(device.displayName)
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button {
-                                refreshDevices()
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .disabled(connectionState == .connecting)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-
-                        Divider().padding(.leading, 14)
-
-                        // 任务标识
-                        HStack {
-                            Text("任务标识")
-                                .font(.system(size: 14))
-                            if isLoadingTasks {
-                                ProgressView().controlSize(.small)
-                            } else if availableTasks.filter({ pushMode == .image ? $0.isImageAPI : $0.isTextAPI }).isEmpty {
-                                Text(selectedTaskKey.isEmpty ? "默认" : selectedTaskKey)
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Picker("", selection: $selectedTaskKey) {
-                                    Text("默认").tag("")
-                                    ForEach(availableTasks.filter({ pushMode == .image ? $0.isImageAPI : $0.isTextAPI })) { task in
-                                        Text(task.key ?? "unknown").tag(task.key ?? "")
-                                    }
-                                }
-                                .labelsHidden()
-                                .fixedSize()
-                                .onChange(of: selectedTaskKey) { _, newValue in
-                                    if newValue.isEmpty {
-                                        UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKey.cachedTaskKey)
-                                    } else {
-                                        UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.cachedTaskKey)
-                                    }
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-
-                        Text("设备有多个\(pushMode == .image ? "图像" : "文本") API 内容时，用于指定推送目标")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 10)
-                    }
-
-                    Divider().padding(.leading, 14)
-
-                    Stepper(
-                        "每 \(pushInterval) 分钟推送一次",
-                        value: $pushInterval,
-                        in: 5...120,
-                        step: 5
-                    )
-                    .fixedSize()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: pushInterval) { _, newValue in
-                        UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.pushInterval)
-                        if WordPushScheduler.shared.isRunning {
-                            WordPushScheduler.shared.restart()
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    Divider().padding(.leading, 14)
-
-                    HStack {
-                        Text("只推送学习中")
-                        Spacer()
-                        Toggle("", isOn: $pushOnlyLearning)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                            .onChange(of: pushOnlyLearning) { _, newValue in
-                                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.pushOnlyLearning)
-                            }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    Divider().padding(.leading, 14)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("推送顺序")
-                            .font(.system(size: 14))
-                        Picker("推送顺序", selection: $pushRandomMode) {
-                            ForEach(Constants.PushRandomMode.allCases, id: \.self) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
-                        .onChange(of: pushRandomMode) { _, newValue in
-                            UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.pushRandomMode)
-                        }
-                        Text(pushRandomMode.description)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    Divider().padding(.leading, 14)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("推送模式")
-                            .font(.system(size: 14))
-                        Picker("模式", selection: $pushMode) {
-                            ForEach(Constants.PushMode.allCases, id: \.self) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
-                        .onChange(of: pushMode) { _, newValue in
-                            UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.pushMode)
-                            loadTasks()
-                        }
-                        Text(pushMode == .image ? "将单词渲染为图片推送，排版更美观" : "推送纯文本内容到设备")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    if pushMode == .image {
-                        Divider().padding(.leading, 14)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("抖动类型")
-                                .font(.system(size: 14))
-                            Picker("抖动类型", selection: $ditherType) {
-                                ForEach(Constants.DitherType.allCases, id: \.self) { type in
-                                    Text(type.displayName).tag(type)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .fixedSize()
-                            .onChange(of: ditherType) { _, newValue in
-                                UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.ditherType)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-
-                        if ditherType == .diffusion {
-                            Divider().padding(.leading, 14)
-
-                            HStack {
-                                Text("抖动算法")
-                                    .font(.system(size: 14))
-                                Picker("抖动算法", selection: $ditherKernel) {
-                                    ForEach(Constants.DitherKernel.allCases, id: \.self) { kernel in
-                                        Text(kernel.displayName).tag(kernel)
-                                    }
-                                }
-                                .labelsHidden()
-                                .fixedSize()
-                                .onChange(of: ditherKernel) { _, newValue in
-                                    UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.ditherKernel)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                        }
-                    }
-
-                    Divider().padding(.leading, 14)
-
-                    // 推送内容预览
-                    pushContentPreview()
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-
-                    Divider().padding(.leading, 14)
-
-                    Button {
-                        isPushingNow = true
-                        Task {
-                            await WordPushScheduler.shared.pushNext()
-                            isPushingNow = false
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            if isPushingNow {
-                                ProgressView().controlSize(.small)
-                            }
-                            Text("立即推送下一条")
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(isPushingNow)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    if let error = WordPushScheduler.shared.lastError {
-                        Text(error)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 10)
-                    }
-                    } // end if pushEnabled
-                }
-                .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal, 14)
-
-                // MARK: 缓存
-                sectionHeader("缓存")
-
-                VStack(spacing: 0) {
-                    HStack {
-                        Text("缓存大小")
-                            .font(.system(size: 14))
-                        Spacer()
-                        Text(cacheSizeText)
-                            .font(.system(size: 14, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    Divider().padding(.leading, 14)
-
-                    Button("清除所有缓存") {
-                        CacheService.shared.clearAllCache()
-                        updateCacheSize()
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.red)
-                    .font(.system(size: 14))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
-                    Text("清除翻译结果缓存，不影响生词本数据")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 10)
-                }
-                .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal, 14)
+                generalSection
+                translationSection
+                ttsSection
+                pushSection
+                cacheSection
+                aboutSection
 
                 Spacer(minLength: 14)
             }
@@ -729,8 +159,602 @@ struct PanelSettingsView: View {
                 stopRecording()
             } else {
                 checkAccessibility()
+                // 用户可能在系统设置中修改了登录项
+                refreshLaunchAtLogin()
             }
         }
+    }
+
+    // MARK: - Sections
+
+    @ViewBuilder
+    private var generalSection: some View {
+        sectionHeader("通用", systemImage: "gearshape")
+
+        settingsCard {
+            HStack {
+                rowLabel("唤醒快捷键", hint: "默认 \(Self.defaultShortcutText)，修改后立即生效，录制时按 Esc 取消")
+                Spacer()
+                Button(isRecordingShortcut ? "按下快捷键..." : shortcutText) {
+                    toggleRecording()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .settingsRow()
+
+            rowDivider
+
+            VStack(alignment: .leading, spacing: 6) {
+                toggleRow("开机自动启动", isOn: Binding(
+                    get: { launchAtLogin },
+                    set: { setLaunchAtLogin($0) }
+                ))
+                if launchAtLoginNeedsApproval {
+                    statusLine(granted: false, text: "需要在系统设置的登录项中允许") {
+                        LaunchAtLogin.openSystemSettings()
+                    }
+                }
+                if let launchAtLoginError {
+                    Text(launchAtLoginError)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                }
+            }
+            .settingsRow()
+
+            rowDivider
+
+            toggleRow(
+                "在菜单栏显示图标",
+                hint: showMenuBarIcon ? nil : "已隐藏，可通过 \(shortcutText) 或再次打开 SnapDict 唤出面板",
+                isOn: $showMenuBarIcon
+            )
+            .onChange(of: showMenuBarIcon) { _, newValue in
+                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.showMenuBarIcon)
+                NotificationCenter.default.post(name: Constants.Notification.menuBarIconVisibilityChanged, object: nil)
+            }
+            .settingsRow()
+
+            rowDivider
+
+            toggleRow("失去焦点自动关闭", isOn: $hideOnFocusLost)
+                .onChange(of: hideOnFocusLost) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.hideOnFocusLost)
+                }
+                .settingsRow()
+
+            rowDivider
+
+            VStack(alignment: .leading, spacing: 6) {
+                toggleRow("自动获取选中文字", hint: "唤出面板时直接查询当前选中的文字", isOn: $autoFetchSelectedText)
+                    .onChange(of: autoFetchSelectedText) { _, newValue in
+                        UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.autoFetchSelectedText)
+                        if newValue {
+                            SelectedTextReader.requestAccessibility()
+                            checkAccessibility()
+                            startAccessibilityPolling()
+                        } else {
+                            stopAccessibilityPolling()
+                        }
+                    }
+                if autoFetchSelectedText {
+                    if accessibilityGranted {
+                        statusLine(granted: true, text: "辅助功能权限已授予")
+                    } else {
+                        statusLine(granted: false, text: "需要辅助功能权限") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                        }
+                    }
+                }
+            }
+            .settingsRow()
+        }
+    }
+
+    @ViewBuilder
+    private var translationSection: some View {
+        sectionHeader("查词", systemImage: "character.book.closed")
+
+        settingsCard {
+            apiKeyRow(
+                title: "DeepSeek",
+                hint: "用于翻译功能，从 platform.deepseek.com 获取",
+                key: $deepSeekKey,
+                savedKey: $savedDeepSeekKey,
+                saveState: $deepSeekSaveState,
+                testState: deepSeekTestState,
+                onSave: {
+                    saveKeyWithTest(
+                        value: deepSeekKey,
+                        defaultsKey: Constants.UserDefaultsKey.deepSeekAPIKey,
+                        savedKey: $savedDeepSeekKey,
+                        saveState: $deepSeekSaveState,
+                        setState: { deepSeekTestState = $0 },
+                        action: { _ = try await DeepSeekService.shared.testAPI() }
+                    )
+                },
+                onTest: { testDeepSeek() }
+            )
+            .settingsRow()
+
+            rowDivider
+
+            toggleRow("显示助记", isOn: $enableMnemonic)
+                .onChange(of: enableMnemonic) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.enableMnemonic)
+                }
+                .settingsRow()
+
+            rowDivider
+
+            toggleRow("显示例句", isOn: $showExamples)
+                .onChange(of: showExamples) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.showExamples)
+                }
+                .settingsRow()
+
+            rowDivider
+
+            toggleRow("显示语法解析", isOn: $showAnalysis)
+                .onChange(of: showAnalysis) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.showAnalysis)
+                }
+                .settingsRow()
+        }
+    }
+
+    @ViewBuilder
+    private var ttsSection: some View {
+        sectionHeader("发音", systemImage: "speaker.wave.2")
+
+        settingsCard {
+            HStack {
+                rowLabel("发音引擎")
+                Spacer()
+                Picker("发音引擎", selection: $ttsEngine) {
+                    ForEach(Constants.TTSEngine.allCases, id: \.self) { engine in
+                        Text(engine.displayName).tag(engine)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .onChange(of: ttsEngine) { _, newValue in
+                    UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.ttsEngine)
+                }
+            }
+            .settingsRow()
+
+            if ttsEngine == .byteDance {
+                rowDivider
+
+                ttsApiKeyRow()
+                    .settingsRow()
+
+                rowDivider
+
+                HStack {
+                    rowLabel("音色")
+                    Spacer()
+                    Picker("", selection: $ttsVoice) {
+                        ForEach(Constants.API.byteDanceTTSVoices, id: \.id) { voice in
+                            Text(voice.name).tag(voice.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .onChange(of: ttsVoice) { _, newValue in
+                        UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.byteDanceTTSVoice)
+                    }
+                }
+                .settingsRow()
+
+                rowDivider
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        rowLabel("音量")
+                        Spacer()
+                        Text("\(ttsVolume)%")
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(
+                        value: Binding(
+                            get: { Double(ttsVolume) },
+                            set: { ttsVolume = Int($0) }
+                        ),
+                        in: 10...Double(Constants.Defaults.ttsVolumeMax),
+                        step: 10
+                    )
+                    .controlSize(.small)
+                    .onChange(of: ttsVolume) { _, newValue in
+                        UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.ttsVolume)
+                    }
+                }
+                .settingsRow()
+
+                rowDivider
+
+                toggleRow("合成失败时降级为系统发音", isOn: $ttsFallbackToSystem)
+                    .onChange(of: ttsFallbackToSystem) { _, newValue in
+                        UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.ttsFallbackToSystem)
+                    }
+                    .settingsRow()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var pushSection: some View {
+        sectionHeader("推送", systemImage: "rectangle.on.rectangle")
+
+        settingsCard {
+            toggleRow("墨水屏推送", hint: pushEnabled ? nil : "定时将单词本中的单词推送到 Dot. 墨水屏", isOn: $pushEnabled)
+                .onChange(of: pushEnabled) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.pushEnabled)
+                    if newValue {
+                        WordPushScheduler.shared.start()
+                    } else {
+                        WordPushScheduler.shared.stop()
+                    }
+                }
+                .settingsRow()
+
+            if pushEnabled {
+                pushSettingsRows
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var pushSettingsRows: some View {
+        rowDivider
+
+        VStack(alignment: .leading, spacing: 8) {
+            dotApiKeyRow()
+            dotConnectionIndicator()
+        }
+        .settingsRow()
+
+        // 设备选择（仅已连接时显示）
+        if case .connected = connectionState {
+            rowDivider
+
+            HStack {
+                rowLabel("设备")
+                Spacer()
+                if connectedDevices.count > 1 {
+                    Picker("", selection: $selectedDeviceId) {
+                        ForEach(connectedDevices) { device in
+                            Text(device.displayName).tag(device.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .onChange(of: selectedDeviceId) { _, newValue in
+                        UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.cachedDeviceId)
+                        loadTasks()
+                    }
+                } else if let device = connectedDevices.first {
+                    Text(device.displayName)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    refreshDevices()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(connectionState == .connecting)
+            }
+            .settingsRow()
+
+            rowDivider
+
+            // 任务标识
+            let matchingTasks = availableTasks.filter { pushMode == .image ? $0.isImageAPI : $0.isTextAPI }
+            HStack {
+                rowLabel("任务标识", hint: "设备有多个\(pushMode == .image ? "图像" : "文本") API 内容时，用于指定推送目标")
+                Spacer()
+                if isLoadingTasks {
+                    ProgressView().controlSize(.small)
+                } else if matchingTasks.isEmpty {
+                    Text(selectedTaskKey.isEmpty ? "默认" : selectedTaskKey)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("", selection: $selectedTaskKey) {
+                        Text("默认").tag("")
+                        ForEach(matchingTasks) { task in
+                            Text(task.key ?? "unknown").tag(task.key ?? "")
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .onChange(of: selectedTaskKey) { _, newValue in
+                        if newValue.isEmpty {
+                            UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKey.cachedTaskKey)
+                        } else {
+                            UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.cachedTaskKey)
+                        }
+                    }
+                }
+            }
+            .settingsRow()
+        }
+
+        rowDivider
+
+        HStack {
+            rowLabel("推送间隔")
+            Spacer()
+            Text("\(pushInterval) 分钟")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(.secondary)
+            Stepper("推送间隔", value: $pushInterval, in: 5...120, step: 5)
+                .labelsHidden()
+                .onChange(of: pushInterval) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.pushInterval)
+                    if WordPushScheduler.shared.isRunning {
+                        WordPushScheduler.shared.restart()
+                    }
+                }
+        }
+        .settingsRow()
+
+        rowDivider
+
+        toggleRow("只推送学习中", isOn: $pushOnlyLearning)
+            .onChange(of: pushOnlyLearning) { _, newValue in
+                UserDefaults.standard.set(newValue, forKey: Constants.UserDefaultsKey.pushOnlyLearning)
+            }
+            .settingsRow()
+
+        rowDivider
+
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                rowLabel("推送顺序")
+                Spacer()
+                Picker("推送顺序", selection: $pushRandomMode) {
+                    ForEach(Constants.PushRandomMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .onChange(of: pushRandomMode) { _, newValue in
+                    UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.pushRandomMode)
+                }
+            }
+            hintText(pushRandomMode.description)
+        }
+        .settingsRow()
+
+        rowDivider
+
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                rowLabel("推送模式")
+                Spacer()
+                Picker("推送模式", selection: $pushMode) {
+                    ForEach(Constants.PushMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .onChange(of: pushMode) { _, newValue in
+                    UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.pushMode)
+                    loadTasks()
+                }
+            }
+            hintText(pushMode == .image ? "将单词渲染为图片推送，排版更美观" : "推送纯文本内容到设备")
+        }
+        .settingsRow()
+
+        if pushMode == .image {
+            rowDivider
+
+            HStack {
+                rowLabel("抖动类型")
+                Spacer()
+                Picker("抖动类型", selection: $ditherType) {
+                    ForEach(Constants.DitherType.allCases, id: \.self) { type in
+                        Text(type.displayName).tag(type)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .onChange(of: ditherType) { _, newValue in
+                    UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.ditherType)
+                }
+            }
+            .settingsRow()
+
+            if ditherType == .diffusion {
+                rowDivider
+
+                HStack {
+                    rowLabel("抖动算法")
+                    Spacer()
+                    Picker("抖动算法", selection: $ditherKernel) {
+                        ForEach(Constants.DitherKernel.allCases, id: \.self) { kernel in
+                            Text(kernel.displayName).tag(kernel)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .onChange(of: ditherKernel) { _, newValue in
+                        UserDefaults.standard.set(newValue.rawValue, forKey: Constants.UserDefaultsKey.ditherKernel)
+                    }
+                }
+                .settingsRow()
+            }
+        }
+
+        rowDivider
+
+        VStack(alignment: .leading, spacing: 10) {
+            pushContentPreview()
+
+            HStack(spacing: 8) {
+                Button {
+                    isPushingNow = true
+                    Task {
+                        await WordPushScheduler.shared.pushNext()
+                        isPushingNow = false
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        if isPushingNow {
+                            ProgressView().controlSize(.small)
+                        }
+                        Text("立即推送下一条")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(isPushingNow)
+
+                if let error = WordPushScheduler.shared.lastError {
+                    Text(error)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .settingsRow()
+    }
+
+    @ViewBuilder
+    private var cacheSection: some View {
+        sectionHeader("缓存", systemImage: "internaldrive")
+
+        settingsCard {
+            HStack {
+                rowLabel(cacheSizeText, hint: "清除翻译结果缓存，不影响生词本数据")
+                Spacer()
+                Button("清除缓存") {
+                    CacheService.shared.clearAllCache()
+                    updateCacheSize()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(.red)
+            }
+            .settingsRow()
+        }
+    }
+
+    @ViewBuilder
+    private var aboutSection: some View {
+        sectionHeader("关于", systemImage: "info.circle")
+
+        settingsCard {
+            HStack {
+                rowLabel("当前版本")
+                Spacer()
+                Text(Self.appVersionText)
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            .settingsRow()
+
+            rowDivider
+
+            HStack {
+                rowLabel("退出 SnapDict", hint: showMenuBarIcon ? nil : "菜单栏图标已隐藏，可在此退出应用")
+                Spacer()
+                Button("退出") {
+                    NSApp.terminate(nil)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .settingsRow()
+        }
+    }
+
+    // MARK: - Row Components
+
+    private static let appVersionText: String = {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-"
+        return "v\(version)"
+    }()
+
+    private func sectionHeader(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 6)
+    }
+
+    private func settingsCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 14)
+    }
+
+    private var rowDivider: some View {
+        Divider().padding(.leading, 14)
+    }
+
+    private func rowLabel(_ title: String, hint: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 13))
+            if let hint {
+                hintText(hint)
+            }
+        }
+    }
+
+    private func hintText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func toggleRow(_ title: String, hint: String? = nil, isOn: Binding<Bool>) -> some View {
+        HStack {
+            rowLabel(title, hint: hint)
+            Spacer()
+            Toggle(title, isOn: isOn)
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .controlSize(.small)
+        }
+    }
+
+    /// 权限 / 授权状态行：未授予时附带「前往设置」按钮
+    private func statusLine(granted: Bool, text: String, openSettings: (() -> Void)? = nil) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(granted ? .green : .orange)
+            Text(text)
+            Spacer()
+            if let openSettings {
+                Button("前往设置", action: openSettings)
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
     }
 
     // MARK: - Dot Push UI Components
@@ -739,7 +763,7 @@ struct PanelSettingsView: View {
     private func dotApiKeyRow() -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("墨水屏 (Dot. App)")
-                .font(.system(size: 14))
+                .font(.system(size: 13))
             HStack(spacing: 6) {
                 SecureKeyField(placeholder:"API Key", text: $dotKey)
                 Button(dotSaveState == .saved ? "已保存" : "保存") {
@@ -807,7 +831,7 @@ struct PanelSettingsView: View {
 
         VStack(alignment: .leading, spacing: 8) {
             Text("推送预览")
-                .font(.system(size: 14))
+                .font(.system(size: 13))
                 .foregroundStyle(.secondary)
 
             if let entry = lastWord {
@@ -934,7 +958,7 @@ struct PanelSettingsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 14))
+                .font(.system(size: 13))
             HStack(spacing: 6) {
                 SecureKeyField(placeholder:placeholder, text: key)
                 apiTestButton(state: testState, action: onTest)
@@ -1036,7 +1060,7 @@ struct PanelSettingsView: View {
     private func ttsApiKeyRow() -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("豆包语音合成")
-                .font(.system(size: 14))
+                .font(.system(size: 13))
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     TextField("App ID", text: $byteDanceTTSAppId)
@@ -1243,15 +1267,6 @@ struct PanelSettingsView: View {
         }
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 20)
-            .padding(.top, 14)
-            .padding(.bottom, 6)
-    }
-
     // MARK: - Shortcut Recording
 
     private func toggleRecording() {
@@ -1362,6 +1377,22 @@ struct PanelSettingsView: View {
         accessibilityPollTimer = nil
     }
 
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        launchAtLoginError = nil
+        do {
+            try LaunchAtLogin.setEnabled(enabled)
+        } catch {
+            launchAtLoginError = "设置失败：\(error.localizedDescription)"
+        }
+        refreshLaunchAtLogin()
+    }
+
+    private func refreshLaunchAtLogin() {
+        let status = LaunchAtLogin.status
+        launchAtLogin = status == .enabled || status == .requiresApproval
+        launchAtLoginNeedsApproval = status == .requiresApproval
+    }
+
     private func loadSettings() {
         deepSeekKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.deepSeekAPIKey) ?? ""
         savedDeepSeekKey = deepSeekKey
@@ -1385,6 +1416,9 @@ struct PanelSettingsView: View {
         autoFetchSelectedText = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.autoFetchSelectedText) as? Bool
             ?? Constants.Defaults.autoFetchSelectedText
         checkAccessibility()
+        refreshLaunchAtLogin()
+        showMenuBarIcon = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.showMenuBarIcon) as? Bool
+            ?? Constants.Defaults.showMenuBarIcon
         let pushModeRaw = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.pushMode) ?? ""
         pushMode = Constants.PushMode(rawValue: pushModeRaw) ?? Constants.Defaults.pushMode
         let ditherTypeRaw = UserDefaults.standard.string(forKey: Constants.UserDefaultsKey.ditherType) ?? ""

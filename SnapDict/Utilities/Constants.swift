@@ -144,6 +144,7 @@ enum Constants {
         static let ttsFallbackToSystem = "ttsFallbackToSystem"
         static let byteDanceTTSVoice = "byteDanceTTSVoice"
         static let ttsVolume = "ttsVolume"
+        static let showMenuBarIcon = "showMenuBarIcon"
     }
 
     enum Defaults {
@@ -162,11 +163,13 @@ enum Constants {
         static let ttsFallbackToSystem = true
         static let ttsVolume = 100
         static let ttsVolumeMax = 500
+        static let showMenuBarIcon = true
     }
 
     enum Notification {
         static let openWordBook = Foundation.Notification.Name("SnapDict.openWordBook")
         static let openSettings = Foundation.Notification.Name("SnapDict.openSettings")
         static let ttsPlaybackStateChanged = Foundation.Notification.Name("SnapDict.ttsPlaybackStateChanged")
+        static let menuBarIconVisibilityChanged = Foundation.Notification.Name("SnapDict.menuBarIconVisibilityChanged")
     }
 }

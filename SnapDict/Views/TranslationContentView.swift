@@ -551,7 +551,7 @@ struct TranslationContentView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "text.book.closed")
                             .font(.system(size: 12))
-                        Text(currentInputType == .chinese ? "用法说明" : "语法解析")
+                        Text(currentInputType.analysisTitle)
                             .font(.system(size: 13))
                     }
                     .foregroundStyle(.secondary)
@@ -734,7 +734,7 @@ struct TranslationContentView: View {
                     self.partialWord = nil
                 }
 
-            case .sentence, .chinese:
+            case .sentence, .chinese, .mixed:
                 do {
                     for try await partial in DeepSeekService.shared.translateSentenceStreaming(text, inputType: inputType) {
                         guard !Task.isCancelled else { return }

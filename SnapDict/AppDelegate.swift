@@ -12,6 +12,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         migrateUserDefaultsIfNeeded()
         resetLegacyPronunciationDefaultsIfNeeded()
         setupStatusItem()
+        applyStatusItemVisibility()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(menuBarIconVisibilityChanged),
+            name: Constants.Notification.menuBarIconVisibilityChanged,
+            object: nil
+        )
 
         // Register hot key
         HotKeyManager.shared.onHotKey = { [weak self] in
@@ -28,6 +35,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if UserDefaults.standard.bool(forKey: Constants.UserDefaultsKey.pushEnabled) {
             WordPushScheduler.shared.start()
         }
+    }
+
+    /// 菜单栏图标隐藏时，再次打开应用（Finder / 启动台）作为唤出面板的入口
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if let container = modelContainer, !PanelManager.shared.isPanelVisible {
+            PanelManager.shared.showPanel(modelContainer: container)
+        }
+        return false
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -109,6 +124,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.target = self
         button.action = #selector(statusItemClicked(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    private func applyStatusItemVisibility() {
+        let visible = UserDefaults.standard.object(forKey: Constants.UserDefaultsKey.showMenuBarIcon) as? Bool
+            ?? Constants.Defaults.showMenuBarIcon
+        statusItem.isVisible = visible
+    }
+
+    @objc private func menuBarIconVisibilityChanged() {
+        applyStatusItemVisibility()
     }
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
